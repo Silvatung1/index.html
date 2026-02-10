@@ -65,6 +65,7 @@
         z-index: 9999;
         display: none;
         backdrop-filter: blur(10px);
+        pointer-events: none;
     "></div>
     
     <div id="app"></div>
@@ -88,6 +89,7 @@
             staffMembers: [], // all staff
             incidents: [], // reported incidents
             alerts: [], // MODULE 2: system alerts
+            gratitudeEntries: [], // GRATITUDE SYSTEM: all feedback entries for admin oversight
             liveEmergencyUsers: [], // MODULE 4: users with emergency live location enabled
             searchResults: [], // results for search
             selectedVendor: null, // for vendor detail view
@@ -109,6 +111,61 @@
 
         // Weather scenarios
 
+        // ==================== PERMISSION SYSTEM ====================
+        
+        /**
+         * Central permission gate - ALL actions must check this
+         * @param {String} action - Action to check
+         * @param {String} role - User role
+         * @returns {Boolean} Whether action is allowed
+         */
+        function canUserDo(action, role) {
+            if (!role) return false;
+            
+            const roleUpper = role.toUpperCase();
+            
+            const permissions = {
+                // Incident reporting
+                reportIncident: {
+                    USER: ['FIRE', 'DRUG'],
+                    VENDOR: ['FIRE', 'DRUG', 'MEDICAL'],
+                    SECURITY: ['FIRE', 'DRUG', 'MEDICAL', 'LOST_CHILD'],
+                    MEDIC: ['FIRE', 'DRUG', 'MEDICAL', 'LOST_CHILD'],
+                    ORGANISER: ['FIRE', 'DRUG', 'MEDICAL', 'LOST_CHILD'],
+                    ADMIN: ['FIRE', 'DRUG', 'MEDICAL', 'LOST_CHILD']
+                },
+                
+                // Incident resolution - VENDORS CANNOT RESOLVE
+                resolveIncident: ['SECURITY', 'MEDIC', 'ORGANISER', 'ADMIN'],
+                
+                // Alert issuing
+                issueAlert: ['ORGANISER', 'ADMIN'],
+                
+                // Live location visibility
+                viewLiveSecurity: ['VENDOR', 'SECURITY', 'MEDIC', 'ORGANISER', 'ADMIN'], // Vendors CAN see security
+                viewLiveMedical: ['VENDOR', 'SECURITY', 'MEDIC', 'ORGANISER', 'ADMIN'],  // Vendors CAN see medical
+                viewLiveEmergency: ['SECURITY', 'MEDIC', 'ORGANISER', 'ADMIN'],
+                
+                // Incident visibility
+                viewActiveIncidents: ['VENDOR', 'SECURITY', 'MEDIC', 'ORGANISER', 'ADMIN'],
+                viewMedicalIncidents: ['SECURITY', 'MEDIC', 'ORGANISER', 'ADMIN'],
+                viewLostChildIncidents: ['SECURITY', 'MEDIC', 'ORGANISER', 'ADMIN']
+            };
+            
+            // Check if action has incident type parameter (for reportIncident)
+            if (action.startsWith('reportIncident:')) {
+                const incidentType = action.split(':')[1];
+                const allowedTypes = permissions.reportIncident[roleUpper] || [];
+                return allowedTypes.includes(incidentType);
+            }
+            
+            // Check standard permissions
+            const allowedRoles = permissions[action];
+            if (!allowedRoles) return false;
+            
+            return allowedRoles.includes(roleUpper);
+        }
+
         // Utility function to navigate between screens (core.js)
         function navigateTo(screen) {
             state.currentScreen = screen;
@@ -116,28 +173,69 @@
             render();
         }
 
-        // Go back function with smart navigation (core.js)
+        // Enhanced navigation - ALWAYS provides a way back
         function goBack(previousScreen = null) {
-            // Smart back navigation (updated for integration.js)
+            console.log('🔙 goBack called from:', state.currentScreen);
+            
+            // If specific screen provided, go there
+            if (previousScreen) {
+                state.currentScreen = previousScreen;
+                updateModeBadge();
+                render();
+                return;
+            }
+            
+            // Smart back navigation map
             const backMap = {
                 'qr-login': 'mode-select',
                 'village-home': 'qr-login',
                 'vendor-dashboard': 'village-home',
-                'vendor-detail': 'vendor-dashboard',
+                'vendor-detail': 'role-dashboard',
                 'vendor-public-view': 'search',
                 'extra-detail': 'vendor-detail',
-                'search': 'village-home',
-                'incidents': 'village-home',
-                'dashboard': 'village-home',
+                'search': 'role-dashboard',
+                'incidents': 'role-dashboard',
+                'alerts': 'role-dashboard',
+                'map': 'role-dashboard',
+                'gratitude': 'role-dashboard',
+                'report-incident': 'role-dashboard',
+                'confirm-incident': 'report-incident',
+                'staff-dashboard': 'role-dashboard',
+                'dashboard': 'role-dashboard',
                 'festival-detail': 'festivals',
-                'festivals': 'login',
+                'festivals': state.currentUser ? 'role-dashboard' : 'login',
                 'login': 'mode-select',
-                'gratitude': 'festivals'
+                'role-dashboard': state.currentUser ? 'festivals' : 'login'
             };
             
-            const targetScreen = previousScreen || backMap[state.currentScreen] || 'mode-select';
+            // Get target screen from map or default to role-dashboard if logged in
+            let targetScreen = backMap[state.currentScreen];
+            
+            // If no mapping and user is logged in, default to role-dashboard
+            if (!targetScreen && state.currentUser) {
+                targetScreen = 'role-dashboard';
+            }
+            
+            // If still no target, go to mode-select
+            if (!targetScreen) {
+                targetScreen = 'mode-select';
+            }
+            
+            console.log('🔙 Navigating to:', targetScreen);
             state.currentScreen = targetScreen;
-            updateModeBadge(); // Update mode badge when going back
+            updateModeBadge();
+            render();
+        }
+
+        // Navigate to home/dashboard
+        function goHome() {
+            console.log('🏠 goHome called');
+            if (state.currentUser) {
+                state.currentScreen = 'role-dashboard';
+            } else {
+                state.currentScreen = 'mode-select';
+            }
+            updateModeBadge();
             render();
         }
 
@@ -646,10 +744,22 @@
         ];
 
         const GRATITUDE_TIERS = [
-            { level: 1, points: 50, reward: 'Free soft drink', icon: '🥤' },
-            { level: 2, points: 120, reward: 'Free coffee or dessert', icon: '☕' },
-            { level: 3, points: 250, reward: '£5 off a meal', icon: '💷' },
-            { level: 4, points: 500, reward: 'Free main meal', icon: '🍽️' }
+            { level: 1, points: 50, reward: 'Free Water', icon: '💧' },
+            { level: 2, points: 100, reward: '£5 off food', icon: '💷' },
+            { level: 3, points: 250, reward: 'Free Dessert', icon: '🍰' },
+            { level: 4, points: 500, reward: 'Free Main Meal', icon: '🍽️' }
+        ];
+        
+        // Preset feedback options (Festival Goers choose from list)
+        const FEEDBACK_PRESETS = [
+            { text: "Loved the food and atmosphere!", sentiment: "very_positive", emoji: "😍" },
+            { text: "Excellent service and quality", sentiment: "very_positive", emoji: "😍" },
+            { text: "Great food, reasonable prices", sentiment: "positive", emoji: "🙂" },
+            { text: "Good experience overall", sentiment: "positive", emoji: "🙂" },
+            { text: "Food was okay, waited a while", sentiment: "neutral", emoji: "😐" },
+            { text: "Average experience", sentiment: "neutral", emoji: "😐" },
+            { text: "Portions smaller than expected", sentiment: "negative", emoji: "🙁" },
+            { text: "Bit pricey for what it was", sentiment: "negative", emoji: "🙁" }
         ];
 
         // MAP PINS - Static festival/venue locations (universal for all modes)
@@ -692,12 +802,12 @@
         ];
 
         const users = [
-            { email: "alice@demo.com", pass: "user123", name: "Alice", role: ROLES.USER },
-            { email: "vendor@demo.com", pass: "vendor123", name: "Falafel Vendor", role: ROLES.VENDOR },
-            { email: "organiser@demo.com", pass: "org123", name: "Sarah", role: ROLES.ORGANISER },
-            { email: "security@demo.com", pass: "sec123", name: "Security", role: ROLES.SECURITY },
-            { email: "medic@demo.com", pass: "med123", name: "Medic", role: ROLES.MEDIC },
-            { email: "admin@gratifood.com", pass: "admin123", name: "Admin", role: "ADMIN" }
+            { id: 1, email: "alice@demo.com", pass: "user123", name: "Alice", role: ROLES.USER, points: 0 },
+            { id: 2, email: "bob@demo.com", pass: "vendor123", name: "Bob", role: ROLES.VENDOR, vendorId: 'demo_vendor_1', points: 0 },
+            { id: 3, email: "charlie@demo.com", pass: "org123", name: "Charlie", role: ROLES.ORGANISER, points: 0 },
+            { id: 4, email: "dave@demo.com", pass: "sec123", name: "Dave", role: ROLES.SECURITY, points: 0 },
+            { id: 5, email: "eve@demo.com", pass: "admin123", name: "Eve", role: "ADMIN", points: 0 },
+            { id: 6, email: "frank@demo.com", pass: "user123", name: "Frank", role: ROLES.USER, points: 0 }
         ];
 
         // ==================== UTILITIES ====================
@@ -789,7 +899,7 @@
                 updateModeBadge();
                 render();
             } else {
-                alert('Invalid credentials!\n\nTry:\nalice@demo.com / user123\nbob@demo.com / vendor123\ncharlie@demo.com / sec123\ndiana@demo.com / org123\neve@demo.com / admin123');
+                alert('❌ Invalid credentials!\n\n🔑 Try these demo accounts:\n\nalice@demo.com / user123 (Festival Goer)\nfrank@demo.com / user123 (Festival Goer)\nbob@demo.com / vendor123 (Vendor)\ndave@demo.com / sec123 (Security)\ncharlie@demo.com / org123 (Organiser)\neve@demo.com / admin123 (Admin)');
             }
         }
 
@@ -804,6 +914,7 @@
 
         // Logout function - redirects to universal logout (MODULE 1)
         function logout() {
+            console.log('🚪 Logout button clicked');
             logoutUniversal();
         }
 
@@ -1223,8 +1334,178 @@
             `;
         }
 
+        // ==================== RENDER FESTIVAL ROLE SELECT ====================
+        function renderFestivalRoleSelect() {
+            // Check if user selected Festival Goer and needs to choose Alice/Frank
+            if (state.pendingRole === 'USER') {
+                return renderFestivalGoerSelect();
+            }
+            
+            return `
+                <div class="login-container">
+                    <div class="login-box">
+                        <button class="btn btn-primary" style="margin-bottom: 20px;" onclick="navigateTo('mode-select')">← Back to Mode Select</button>
+                        
+                        <h1 style="font-size: 36px; text-align: center; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 10px;">
+                            🎉 GratiFood Festival
+                        </h1>
+                        <p style="text-align: center; color: #666; margin-bottom: 30px; font-size: 14px;">Choose Your Role</p>
+                        
+                        <div style="display: grid; gap: 12px;">
+                            <button class="btn btn-primary" style="width: 100%; text-align: left; padding: 15px;" 
+                                onclick="selectFestivalRole('USER')">
+                                <div style="font-size: 16px; font-weight: bold;">👤 Festival Goer</div>
+                                <div style="font-size: 12px; opacity: 0.9; margin-top: 3px;">Browse vendors, earn rewards, toggle emergency</div>
+                            </button>
+                            
+                            <button class="btn btn-warning" style="width: 100%; text-align: left; padding: 15px;" 
+                                onclick="selectFestivalRole('VENDOR')">
+                                <div style="font-size: 16px; font-weight: bold;">🏪 Vendor</div>
+                                <div style="font-size: 12px; opacity: 0.9; margin-top: 3px;">Manage your vendor dashboard</div>
+                            </button>
+                            
+                            <button class="btn btn-danger" style="width: 100%; text-align: left; padding: 15px;" 
+                                onclick="selectFestivalRole('SECURITY')">
+                                <div style="font-size: 16px; font-weight: bold;">🚨 SecMed</div>
+                                <div style="font-size: 12px; opacity: 0.9; margin-top: 3px;">Security & Medical - See emergencies</div>
+                            </button>
+                            
+                            <button class="btn btn-info" style="width: 100%; text-align: left; padding: 15px; background: #17a2b8; color: white;" 
+                                onclick="selectFestivalRole('ORGANISER')">
+                                <div style="font-size: 16px; font-weight: bold;">📋 Organiser</div>
+                                <div style="font-size: 12px; opacity: 0.9; margin-top: 3px;">Manage festival, see emergencies</div>
+                            </button>
+                            
+                            <button class="btn" style="width: 100%; text-align: left; padding: 15px; background: #6c757d; color: white;" 
+                                onclick="selectFestivalRole('ADMIN')">
+                                <div style="font-size: 16px; font-weight: bold;">⚙️ Admin</div>
+                                <div style="font-size: 12px; opacity: 0.9; margin-top: 3px;">Full system access</div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // ==================== RENDER FESTIVAL GOER SELECT (ALICE/FRANK) ====================
+        function renderFestivalGoerSelect() {
+            return `
+                <div class="login-container">
+                    <div class="login-box">
+                        <button class="btn btn-primary" style="margin-bottom: 20px;" onclick="state.pendingRole = null; render();">← Back to Role Select</button>
+                        
+                        <h1 style="font-size: 36px; text-align: center; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 10px;">
+                            👤 Festival Goer
+                        </h1>
+                        <p style="text-align: center; color: #666; margin-bottom: 30px; font-size: 14px;">Choose Your Account</p>
+                        
+                        <div style="display: grid; gap: 12px;">
+                            <button class="btn btn-success" style="width: 100%; text-align: left; padding: 20px;" 
+                                onclick="loginAsFestivalGoer('alice')">
+                                <div style="font-size: 18px; font-weight: bold;">🌟 Alice</div>
+                                <div style="font-size: 13px; opacity: 0.9; margin-top: 5px;">Festival Goer Account #1</div>
+                                <div style="font-size: 11px; opacity: 0.8; margin-top: 3px;">alice@demo.com</div>
+                            </button>
+                            
+                            <button class="btn btn-success" style="width: 100%; text-align: left; padding: 20px;" 
+                                onclick="loginAsFestivalGoer('frank')">
+                                <div style="font-size: 18px; font-weight: bold;">🎸 Frank</div>
+                                <div style="font-size: 13px; opacity: 0.9; margin-top: 5px;">Festival Goer Account #2</div>
+                                <div style="font-size: 11px; opacity: 0.8; margin-top: 3px;">frank@demo.com</div>
+                            </button>
+                        </div>
+                        
+                        <div style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border: 2px solid #2196f3;">
+                            <p style="font-weight: bold; margin-bottom: 8px; font-size: 13px; color: #1976d2;">💡 Multi-Device Demo</p>
+                            <p style="font-size: 12px; color: #666; margin: 0;">Alice and Frank can login simultaneously on different devices. Each has independent state and emergency toggle.</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // ==================== SELECT FESTIVAL ROLE ====================
+        function selectFestivalRole(role) {
+            if (role === 'USER') {
+                // Festival Goer: Show Alice/Frank selection
+                state.pendingRole = 'USER';
+                render();
+            } else {
+                // Other roles: Login directly
+                let user;
+                switch(role) {
+                    case 'VENDOR':
+                        user = users.find(u => u.email === 'bob@demo.com');
+                        break;
+                    case 'SECURITY':
+                        user = users.find(u => u.email === 'dave@demo.com');
+                        break;
+                    case 'ORGANISER':
+                        user = users.find(u => u.email === 'charlie@demo.com');
+                        break;
+                    case 'ADMIN':
+                        user = users.find(u => u.email === 'eve@demo.com');
+                        break;
+                }
+                
+                if (user) {
+                    state.currentUser = user;
+                    state.currentRole = user.role;
+                    state.pendingRole = null;
+                    
+                    // Store in localStorage for persistence
+                    localStorage.setItem('gratifood_user_' + user.email, JSON.stringify(user));
+                    
+                    state.currentScreen = 'role-dashboard';
+                    render();
+                }
+            }
+        }
+        
+        // ==================== LOGIN AS FESTIVAL GOER (ALICE/FRANK) ====================
+        function loginAsFestivalGoer(account) {
+            let user;
+            if (account === 'alice') {
+                user = users.find(u => u.email === 'alice@demo.com');
+            } else if (account === 'frank') {
+                user = users.find(u => u.email === 'frank@demo.com');
+            }
+            
+            if (user) {
+                // Load existing state from localStorage if exists
+                const stored = localStorage.getItem('gratifood_user_' + user.email);
+                if (stored) {
+                    const storedUser = JSON.parse(stored);
+                    // Merge stored state with base user
+                    user = {...user, ...storedUser};
+                }
+                
+                state.currentUser = user;
+                state.currentRole = user.role;
+                state.pendingRole = null;
+                
+                // Initialize emergency status in shared state
+                if (!state.emergencyStatus) state.emergencyStatus = {};
+                if (state.emergencyStatus[user.id] === undefined) {
+                    state.emergencyStatus[user.id] = false;
+                }
+                
+                // Store in localStorage
+                localStorage.setItem('gratifood_user_' + user.email, JSON.stringify(user));
+                
+                state.currentScreen = 'role-dashboard';
+                render();
+            }
+        }
+
         // ==================== RENDER LOGIN ====================
         function renderLogin() {
+            // Festival Mode: Show Role Select (like Village Fête)
+            if (state.mode === 'festival') {
+                return renderFestivalRoleSelect();
+            }
+            
+            // Fallback: Traditional login
             return `
                 <div class="login-container">
                     <div class="login-box">
@@ -1248,19 +1529,20 @@
                         <button class="btn btn-facebook" style="width: 100%; margin-bottom: 10px;" onclick="socialLogin('Facebook')">📘 Facebook</button>
                         <button class="btn btn-google" style="width: 100%;" onclick="socialLogin('Google')">🔴 Google</button>
 
-                        <div style="margin-top: 20px; padding: 15px; background: #f0f8ff; border-radius: 8px; border: 2px solid #4caf50;">
-                            <p style="font-weight: bold; margin-bottom: 8px; font-size: 14px;">🎮 Demo Controls</p>
-                            <button class="btn btn-success" style="width: 100%; margin-bottom: 5px; font-size: 12px;" onclick="initDemo()">🔄 Initialize Demo</button>
-                            <button class="btn btn-danger" style="width: 100%; font-size: 12px;" onclick="resetDemo()">🗑️ Reset Demo</button>
+                        <div style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border: 2px solid #2196f3;">
+                            <p style="font-weight: bold; margin-bottom: 8px; font-size: 14px; color: #1976d2;">🎬 Demo Mode</p>
+                            <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Pre-populate the shared world with realistic incidents, feedback, and alerts for demonstration.</p>
+                            <button class="btn btn-primary" style="width: 100%; font-size: 13px;" onclick="initDemo()">🎬 Activate Demo Data</button>
                         </div>
 
                         <div style="margin-top: 15px; padding: 15px; background: #f9f9f9; border-radius: 8px; font-size: 12px;">
-                            <p style="font-weight: bold; margin-bottom: 8px;">🔑 Demo Accounts (5 roles):</p>
-                            <p>👤 Festival Goer: alice@demo.com / user123</p>
-                            <p>🏪 Vendor: bob@demo.com / vendor123</p>
-                            <p>🛡️ Security: charlie@demo.com / sec123</p>
-                            <p>📋 Organiser: diana@demo.com / org123</p>
-                            <p>⚙️ Admin: eve@demo.com / admin123</p>
+                            <p style="font-weight: bold; margin-bottom: 8px;">🔑 Demo Accounts (6 users):</p>
+                            <p>👤 Alice (Festival Goer): alice@demo.com / user123</p>
+                            <p>👤 Frank (Festival Goer): frank@demo.com / user123</p>
+                            <p>🏪 Bob (Vendor): bob@demo.com / vendor123</p>
+                            <p>🛡️ Dave (Security): dave@demo.com / sec123</p>
+                            <p>📋 Charlie (Organiser): charlie@demo.com / org123</p>
+                            <p>⚙️ Eve (Admin): eve@demo.com / admin123</p>
                         </div>
                     </div>
                 </div>
@@ -1360,82 +1642,117 @@
 
         // ==================== RENDER VENDOR DETAIL ====================
         function renderVendorDetail() {
-            const nextReward = state.selectedVendor.gratitudeRewardsEnabled ? getNextGratitudeReward(state.userPoints) : null;
+            const user = state.currentUser;
+            const vendor = state.selectedVendor;
+            const hasPurchased = user && user.purchasedVendors && user.purchasedVendors.includes(vendor.id);
+            const nextReward = vendor.gratitudeRewardsEnabled ? getNextGratitudeReward(user?.points || 0) : null;
 
             return `
                 <div class="container">
-                    <button class="btn btn-primary" onclick="goBack()">← Back to Festival</button>
+                    <button class="btn btn-primary" onclick="goBack()">← Back</button>
+                    <button class="btn btn-secondary" onclick="goHome()">🏠 Home</button>
 
                     <div class="header" style="margin-top: 20px; background: linear-gradient(135deg, #f093fb, #f5576c);">
-                        <h1>${state.selectedVendor.name}</h1>
-                        <p>${state.selectedVendor.cuisine}</p>
-                        <div class="vibe-score" style="margin-top: 10px; font-size: 48px;">${state.selectedVendor.vibeScore}</div>
-                        <p style="opacity: 0.9;">Vibe Score from ${state.selectedVendor.reviews.length} reviews</p>
+                        <h1>${vendor.name}</h1>
+                        <p style="font-size: 16px; opacity: 0.9;">${vendor.cuisine}</p>
+                        <div class="vibe-score" style="margin-top: 15px; font-size: 64px; font-weight: bold;">${vendor.averageVibeScore || vendor.vibeScore}</div>
+                        <p style="opacity: 0.9; font-size: 18px; margin: 5px 0;">out of 5 stars</p>
+                        <p style="opacity: 0.8; font-size: 14px;">Average Rating</p>
                     </div>
 
                     <div class="card" style="cursor: default;">
                         <div class="grid-3">
-                            <div class="stat-box"><p style="font-size: 11px; color: #666;">Queue</p><p class="${getQueueClass(state.selectedVendor.queueSpeed)}" style="margin: 5px 0; font-size: 16px;">${state.selectedVendor.queueSpeed}</p></div>
-                            <div class="stat-box"><p style="font-size: 11px; color: #666;">Vibe Score</p><p style="margin: 5px 0; font-weight: bold; font-size: 16px;">${state.selectedVendor.vibeScore}/5</p></div>
-                            <div class="stat-box"><p style="font-size: 11px; color: #666;">Reviews</p><p style="margin: 5px 0; font-weight: bold; font-size: 16px;">${state.selectedVendor.reviews.length}</p></div>
+                            <div class="stat-box"><p style="font-size: 11px; color: #666;">Queue</p><p class="${getQueueClass(vendor.queueSpeed)}" style="margin: 5px 0; font-size: 16px;">${vendor.queueSpeed}</p></div>
+                            <div class="stat-box"><p style="font-size: 11px; color: #666;">Vibe Score</p><p style="margin: 5px 0; font-weight: bold; font-size: 16px;">${vendor.averageVibeScore || vendor.vibeScore}/5</p></div>
+                            <div class="stat-box"><p style="font-size: 11px; color: #666;">Feedback</p><p style="margin: 5px 0; font-weight: bold; font-size: 16px;">${(vendor.userFeedback || []).length}</p></div>
                         </div>
                     </div>
-
-                    ${nextReward ? `
-                        <div class="reward-tier">
-                            <h3 style="margin: 0 0 10px 0;">🎁 Next Gratitude Reward</h3>
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <div><p style="font-size: 20px; margin: 0;">${nextReward.icon} ${nextReward.reward}</p><p style="font-size: 14px; opacity: 0.9; margin: 5px 0 0 0;">You need ${nextReward.points - state.userPoints} more points</p></div>
-                                <div style="font-size: 32px; font-weight: bold;">${nextReward.points} pts</div>
-                            </div>
+                    
+                    ${user && user.points !== undefined ? `
+                        <div class="card" style="cursor: default; background: linear-gradient(135deg, #a8edea, #fed6e3);">
+                            <h3 style="margin: 0 0 10px 0;">🏆 Your Points: ${user.points}</h3>
+                            ${nextReward ? `<p style="font-size: 13px; color: #666;">${nextReward.icon} ${nextReward.points - user.points} points until ${nextReward.reward}</p>` : ''}
                         </div>
                     ` : ''}
 
                     <div class="card" style="cursor: default;">
-                        <h3 style="margin-bottom: 10px;">📋 Menu</h3>
-                        ${state.selectedVendor.menu.map(item => `<p style="margin: 5px 0; font-size: 14px;">• ${item}</p>`).join('')}
+                        <h3 style="margin-bottom: 10px;">📋 Menu & Prices</h3>
+                        ${vendor.menu.map((item, i) => {
+                            const price = vendor.prices ? vendor.prices[item] : (5 + i);
+                            return `<div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee;">
+                                <span style="font-size: 14px;">• ${item}</span>
+                                <span style="font-weight: bold; color: #28a745;">£${price}</span>
+                            </div>`;
+                        }).join('')}
                     </div>
-
-                    <div class="card" style="cursor: default;">
-                        <h3 style="margin-bottom: 15px;">⭐ Reviews (${state.selectedVendor.reviews.length})</h3>
-                        ${state.selectedVendor.reviews.length === 0 ? '<p style="color: #999;">No reviews yet. Be the first!</p>' : ''}
-                        ${state.selectedVendor.reviews.map(r => `<div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 10px;">
-                            <div style="display: flex; gap: 5px; margin-bottom: 5px;">${'⭐'.repeat(r.stars)}</div>
-                            ${r.emojis.map(e => `<span style="font-size: 20px;">${e}</span>`).join(' ')}
-                            ${r.comment ? `<p style="margin: 10px 0 0 0; font-size: 14px;">"${r.comment}"</p>` : ''}
-                        </div>`).join('')}
-                        ${state.currentRole === ROLES.USER ? `<button class="btn btn-success" style="width: 100%; margin-top: 15px;" onclick="submitReview('${state.selectedVendor.id}')">⭐ Leave a Review (+10 points)</button>` : ''}
-                    </div>
-
+                    
                     ${state.currentRole === ROLES.USER ? `
-                        <div class="card" style="cursor: default; background: linear-gradient(135deg, #ffd54f, #ffb300);">
-                            <h3>💬 Leave Quick Feedback</h3>
-                            <p style="font-size: 13px; margin: 10px 0;">Earn Gratitude Points!</p>
-                            <textarea id="feedback-text" class="input" placeholder="Share your experience... (+5 points)" rows="3"></textarea>
-                            <div style="margin: 15px 0;">
-                                <p style="font-size: 13px; margin-bottom: 10px;">Quick Emoji (+2 points each):</p>
-                                <div class="grid-3" style="gap: 10px;">
-                                    <button class="btn" style="font-size: 24px; padding: 10px;" onclick="selectEmoji('😋')">😋</button>
-                                    <button class="btn" style="font-size: 24px; padding: 10px;" onclick="selectEmoji('👍')">👍</button>
-                                    <button class="btn" style="font-size: 24px; padding: 10px;" onclick="selectEmoji('🔥')">🔥</button>
-                                    <button class="btn" style="font-size: 24px; padding: 10px;" onclick="selectEmoji('😊')">😊</button>
-                                    <button class="btn" style="font-size: 24px; padding: 10px;" onclick="selectEmoji('🎉')">🎉</button>
-                                    <button class="btn" style="font-size: 24px; padding: 10px;" onclick="selectEmoji('💯')">💯</button>
+                        <div class="card" style="cursor: default; background: linear-gradient(135deg, #56ccf2, #2f80ed);">
+                            <h3 style="color: white; margin: 0 0 15px 0;">💳 Make a Purchase (Demo)</h3>
+                            <p style="color: white; opacity: 0.9; font-size: 13px; margin-bottom: 15px;">Simulate a purchase to earn points and unlock feedback!</p>
+                            ${!hasPurchased ? `
+                                <button class="btn" style="background: white; color: #2f80ed; width: 100%; font-size: 16px; font-weight: bold;" onclick="makePurchase('${vendor.id}', '${vendor.menu[0]}', ${vendor.prices ? vendor.prices[vendor.menu[0]] : 6})">
+                                    🛒 Purchase ${vendor.menu[0]} (+10 points)
+                                </button>
+                            ` : `
+                                <div style="background: rgba(255,255,255,0.2); padding: 15px; border-radius: 8px; text-align: center;">
+                                    <p style="color: white; font-weight: bold; margin: 0;">✅ Purchase Complete!</p>
+                                    <p style="color: white; font-size: 13px; margin: 5px 0 0 0;">You can now leave feedback below</p>
                                 </div>
-                                <p id="selected-emoji" style="font-size: 13px; margin-top: 10px; color: #666;">Selected: <span id="emoji-display">None</span></p>
-                            </div>
-                            <button class="btn btn-success" style="width: 100%;" onclick="
-                                const feedback = document.getElementById('feedback-text').value;
-                                const emoji = window.selectedEmoji || null;
-                                leaveFeedback('${state.selectedVendor.id}', feedback, emoji);
-                            ">Submit Feedback</button>
+                            `}
                         </div>
                     ` : ''}
 
-                    <!-- THIRD LAYER BUTTON -->
-                    <button class="btn btn-warning" style="width: 100%; margin-top: 20px;" onclick="state.currentScreen='extra-detail'; state.extraVendor = state.selectedVendor; render();">
-                        🔹 View Extra Detail
-                    </button>
+                    ${state.currentRole === ROLES.USER && hasPurchased ? `
+                        <div class="card" style="cursor: default; background: linear-gradient(135deg, #ffd54f, #ffb300);">
+                            <h3>💝 Leave Feedback</h3>
+                            <p style="font-size: 12px; color: #856404; margin: 10px 0;">Earn points by sharing your experience!</p>
+                            
+                            <div style="margin: 15px 0;">
+                                <p style="font-size: 13px; margin-bottom: 10px; font-weight: bold;">⭐ Star Rating (+5 points):</p>
+                                <div style="display: flex; gap: 10px; justify-content: center;">
+                                    <button class="btn" style="font-size: 28px; padding: 10px 15px;" onclick="selectVibeRating(1)">1⭐</button>
+                                    <button class="btn" style="font-size: 28px; padding: 10px 15px;" onclick="selectVibeRating(2)">2⭐</button>
+                                    <button class="btn" style="font-size: 28px; padding: 10px 15px;" onclick="selectVibeRating(3)">3⭐</button>
+                                    <button class="btn" style="font-size: 28px; padding: 10px 15px;" onclick="selectVibeRating(4)">4⭐</button>
+                                    <button class="btn" style="font-size: 28px; padding: 10px 15px;" onclick="selectVibeRating(5)">5⭐</button>
+                                </div>
+                                <p id="vibe-rating-display" style="text-align: center; font-size: 14px; margin-top: 10px; font-weight: bold;">Selected: <span>3</span> stars</p>
+                            </div>
+                            
+                            <div style="margin: 15px 0;">
+                                <p style="font-size: 13px; margin-bottom: 10px; font-weight: bold;">😊 Mood Emoji (+2 points):</p>
+                                <div style="display: flex; gap: 10px; justify-content: center;">
+                                    <button class="btn" style="font-size: 32px; padding: 10px;" onclick="selectEmoji('😍')">😍</button>
+                                    <button class="btn" style="font-size: 32px; padding: 10px;" onclick="selectEmoji('🙂')">🙂</button>
+                                    <button class="btn" style="font-size: 32px; padding: 10px;" onclick="selectEmoji('😐')">😐</button>
+                                    <button class="btn" style="font-size: 32px; padding: 10px;" onclick="selectEmoji('🙁')">🙁</button>
+                                </div>
+                                <p id="selected-emoji" style="font-size: 13px; margin-top: 10px; text-align: center; color: #666;">Selected: <span id="emoji-display">None</span></p>
+                            </div>
+                            
+                            <div style="margin: 15px 0;">
+                                <p style="font-size: 13px; margin-bottom: 10px; font-weight: bold;">💬 Quick Feedback (+3 points):</p>
+                                <select id="preset-feedback" class="input" style="width: 100%;">
+                                    <option value="">Choose a comment...</option>
+                                    ${FEEDBACK_PRESETS.map(preset => `<option value="${preset.text}">${preset.emoji} ${preset.text}</option>`).join('')}
+                                </select>
+                            </div>
+                            
+                            <button class="btn btn-success" style="width: 100%; font-size: 16px; font-weight: bold;" onclick="
+                                const feedbackSelect = document.getElementById('preset-feedback');
+                                const feedback = feedbackSelect ? feedbackSelect.value : '';
+                                const emoji = window.selectedEmoji || '';
+                                const vibeRating = window.selectedVibeRating || 3;
+                                leaveFeedback('${vendor.id}', feedback, emoji, vibeRating);
+                            ">✨ Submit Feedback</button>
+                        </div>
+                    ` : state.currentRole === ROLES.USER ? `
+                        <div class="card" style="cursor: default; background: #fff3cd; border: 2px solid #ffc107;">
+                            <h3 style="color: #856404; margin: 0 0 10px 0;">🔒 Feedback Locked</h3>
+                            <p style="color: #856404; font-size: 14px; margin: 0;">Make a purchase first to unlock feedback and earn points!</p>
+                        </div>
+                    ` : ''}
                 </div>
             `;
         }
@@ -1445,6 +1762,14 @@
         function selectEmoji(emoji) {
             window.selectedEmoji = emoji;
             document.getElementById('emoji-display').textContent = emoji;
+        }
+
+        function selectVibeRating(rating) {
+            window.selectedVibeRating = rating;
+            const display = document.getElementById('vibe-rating-display');
+            if (display) {
+                display.innerHTML = `Selected: <span style="color: ${rating >= 4 ? '#28a745' : rating >= 3 ? '#ffc107' : '#dc3545'};">${rating}</span> stars`;
+            }
         }
 
         // ==================== RENDER EXTRA DETAIL (THIRD LAYER) ====================
@@ -1497,36 +1822,72 @@
 
         // ==================== RENDER GRATITUDE ====================
         function renderGratitude() {
-            const currentTier = GRATITUDE_TIERS.findIndex(t => state.userPoints < t.points);
-            const nextTier = GRATITUDE_TIERS[currentTier === -1 ? GRATITUDE_TIERS.length - 1 : currentTier];
+            const user = state.currentUser;
+            const points = user?.points || 0;
+            const achievedRewards = user?.achievedRewards || [];
+            const redeemedRewards = user?.redeemedRewards || [];
             
             return `
                 <div class="container">
-                    <button class="btn btn-primary" onclick="state.currentScreen='festivals'; render();">← Back</button>
+                    <button class="btn btn-primary" onclick="goBack()">← Back</button>
+                    <button class="btn btn-secondary" onclick="goHome()">🏠 Home</button>
                     
-                    <div class="header">
+                    <div class="header" style="background: linear-gradient(135deg, #ffd54f, #ffb300);">
                         <h1>🏆 Gratitude Rewards</h1>
-                        <p style="font-size: 32px; font-weight: bold; margin: 10px 0;">${state.userPoints} Points</p>
-                        <p style="opacity: 0.9;">Next reward: ${nextTier.points - state.userPoints} points to go!</p>
+                        <p style="font-size: 48px; font-weight: bold; margin: 15px 0;">${points}</p>
+                        <p style="opacity: 0.9; font-size: 18px;">Your Points</p>
                     </div>
 
                     ${GRATITUDE_TIERS.map((tier) => {
-                        const unlocked = state.userPoints >= tier.points;
+                        const unlocked = achievedRewards.includes(tier.level);
+                        const redeemed = redeemedRewards.includes(tier.level);
+                        const canAfford = points >= tier.points;
+                        
                         return `
-                            <div class="card" style="cursor: default; opacity: ${unlocked ? 1 : 0.6};">
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div class="card" style="cursor: default; opacity: ${unlocked ? 1 : 0.5}; border: ${unlocked && !redeemed ? '3px solid #28a745' : '1px solid #ddd'};">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                                     <div>
-                                        <h3 style="margin: 0;">Level ${tier.level} ${unlocked ? '✅' : '🔒'}</h3>
-                                        <p style="font-size: 18px; margin: 10px 0 0 0;">${tier.icon} ${tier.reward}</p>
+                                        <h3 style="margin: 0;">
+                                            ${tier.icon} ${tier.reward}
+                                            ${redeemed ? '<span style="color: #6c757d; font-size: 14px;"> (Redeemed)</span>' : ''}
+                                        </h3>
+                                        <p style="font-size: 14px; color: #666; margin: 5px 0 0 0;">
+                                            ${unlocked ? '✅ Earned' : `🔒 Need ${tier.points - points} more points`}
+                                        </p>
                                     </div>
                                     <div style="text-align: right;">
-                                        <p style="font-size: 24px; font-weight: bold; margin: 0;">${tier.points}</p>
+                                        <p style="font-size: 32px; font-weight: bold; margin: 0;">${tier.points}</p>
                                         <p style="font-size: 12px; color: #666;">points</p>
                                     </div>
                                 </div>
+                                
+                                ${unlocked && !redeemed ? `
+                                    <button class="btn btn-success" style="width: 100%;" onclick="redeemReward(${tier.level})">
+                                        💳 Redeem Now (-${tier.points} points)
+                                    </button>
+                                ` : redeemed ? `
+                                    <div style="background: #d4edda; padding: 12px; border-radius: 8px; text-align: center;">
+                                        <p style="margin: 0; color: #155724; font-weight: bold;">✓ Already Redeemed</p>
+                                        <p style="margin: 5px 0 0 0; font-size: 12px; color: #155724;">Show this to vendors</p>
+                                    </div>
+                                ` : `
+                                    <button class="btn" style="width: 100%; opacity: 0.5; cursor: not-allowed;" disabled>
+                                        🔒 Locked
+                                    </button>
+                                `}
                             </div>
                         `;
                     }).join('')}
+                    
+                    <div class="card" style="cursor: default; background: #e7f3ff;">
+                        <h3 style="margin: 0 0 10px 0;">💡 How it Works</h3>
+                        <p style="font-size: 14px; color: #666; margin: 0;">
+                            • Earn points by making purchases and leaving feedback<br>
+                            • Unlock rewards when you reach point thresholds<br>
+                            • Click "Redeem Now" to use your reward (demo mode)<br>
+                            • Show redeemed rewards to vendors to claim
+                        </p>
+                    </div>
                 </div>
             `;
         }
@@ -1645,11 +2006,15 @@
             const allIncidentsCount = state.incidents.length;
             const unresolvedCount = state.incidents.filter(i => !i.resolved).length;
             const resolvedCount = state.incidents.filter(i => i.resolved).length;
-            const canResolve = ['vendor', 'VENDOR', 'organiser', 'ORGANISER', 'secmd', 'SECURITY', 'MEDIC', 'admin', 'ADMIN'].includes(currentRole);
+            const canResolve = canUserDo('resolveIncident', currentRole);
+            
+            // Show detailed timeline for organisers/admin
+            const showDetailedTimeline = ['ORGANISER', 'ADMIN'].includes(currentRole.toUpperCase());
 
             return `
                 <div class="container">
                     <button class="btn btn-primary" onclick="goBack()">← Back</button>
+                    <button class="btn btn-secondary" onclick="goHome()">🏠 Home</button>
                     <button class="btn btn-danger" onclick="logout()" style="float: right;">Logout</button>
                     
                     <div class="header" style="background: linear-gradient(135deg, #f093fb, #f5576c);">
@@ -1676,6 +2041,13 @@
                             <p style="color: #666;">Resolved</p>
                         </div>
                     </div>
+                    
+                    ${showDetailedTimeline ? `
+                        <div class="card" style="cursor: default; background: linear-gradient(135deg, #667eea, #764ba2);">
+                            <h3 style="color: white; margin: 0 0 15px 0;">📋 Detailed Incident Timeline</h3>
+                            ${renderIncidentTimeline(state.currentUser)}
+                        </div>
+                    ` : ''}
 
                     ${visibleIncidents.length === 0 ? `
                         <div class="card" style="cursor: default; text-align: center; padding: 40px;">
@@ -1693,10 +2065,12 @@
                             </div>
                             <p style="font-weight: bold;">${i.description || i.type || 'Incident'}</p>
                             <p style="font-size: 12px; color: #999;">Reported by: ${i.reportedBy || i.reporter} (${i.reporterRole || 'Unknown'})</p>
+                            <p style="font-size: 12px; color: #666;">Created: ${new Date(i.timestamp).toLocaleString()}</p>
+                            ${i.resolved ? `<p style="font-size: 12px; color: #28a745;">✅ Resolved by: ${i.resolvedBy} at ${new Date(i.resolvedAt).toLocaleString()}</p>` : ''}
                             ${i.festivalId ? `<p style="font-size: 12px; color: #666;">Festival: ${state.festivals.find(f => f.id === i.festivalId)?.name || i.festivalId}</p>` : ''}
                             ${canResolve && !i.resolved ? `
                                 <button class="btn btn-success" style="margin-top: 10px;" onclick="resolveIncidentWithPermissions('${i.id}')">
-                                    Resolve
+                                    ✅ Resolve Incident
                                 </button>
                             ` : ''}
                         </div>
@@ -1716,9 +2090,16 @@
             const canReportIncidents = ['VENDOR', 'ORGANISER', 'SECURITY', 'MEDIC', 'ADMIN'].includes(role);
             
             let html = `<div class="container">
+                            <!-- NAVIGATION BAR -->
+                            <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+                                <button class="btn btn-primary" onclick="goBack()">← Back</button>
+                                <button class="btn btn-secondary" onclick="goHome()">🏠 Home</button>
+                                <button class="btn btn-danger" onclick="logout()" style="margin-left: auto;">🚪 Logout</button>
+                            </div>
+                            
                             <div class="header">
-                                <h1>Welcome, ${user.name} (${role})</h1>
-                                <button class="btn btn-danger" onclick="logout()" style="float: right;">Logout</button>
+                                <h1>Welcome, ${user.name}</h1>
+                                <p style="font-size: 18px; margin: 5px 0;">${role} Dashboard</p>
                             </div>`;
             
             // Weather banner (all roles)
@@ -1728,10 +2109,40 @@
             if (role === 'USER') {
                 const points = user.points || 0;
                 const nextReward = getNextGratitudeReward(points);
+                const achievedRewards = user.achievedRewards || [];
+                
                 html += `<div class="card" style="cursor: default; background: linear-gradient(135deg, #ffd54f, #ffb300);">
-                            <h3 style="margin: 0;">🏆 Gratitude Points: ${points}</h3>
-                            <p style="font-size: 13px; margin: 5px 0;">Next: ${nextReward.icon} ${nextReward.reward} (${nextReward.points - points} points to go)</p>
+                            <h3 style="margin: 0 0 10px 0;">🏆 Gratitude Points: ${points}</h3>
+                            <p style="font-size: 13px; margin: 5px 0 0 0;">Next: ${nextReward.icon} ${nextReward.reward} (${nextReward.points - points} points to go)</p>
                         </div>`;
+                
+                // Emergency Toggle for Festival Goers
+                const emergencyActive = state.emergencyStatus && state.emergencyStatus[user.id];
+                html += `<div class="card" style="cursor: default; background: ${emergencyActive ? 'linear-gradient(135deg, #ff6b6b, #ee5a6f)' : 'linear-gradient(135deg, #f8f9fa, #e9ecef)'}; border: 2px solid ${emergencyActive ? '#ff1744' : '#ddd'};">
+                            <h3 style="margin: 0 0 10px 0; color: ${emergencyActive ? 'white' : '#333'};">🚨 Emergency Toggle</h3>
+                            <p style="font-size: 13px; color: ${emergencyActive ? 'rgba(255,255,255,0.9)' : '#666'}; margin: 0 0 15px 0;">
+                                ${emergencyActive ? 'Emergency signal active - SecMed & Organisers can see your location' : 'Activate if you need emergency assistance'}
+                            </p>
+                            <button class="btn ${emergencyActive ? 'btn-light' : 'btn-danger'}" style="width: 100%; font-size: 16px; font-weight: bold;" onclick="toggleEmergency()">
+                                ${emergencyActive ? '✓ Emergency Active - Click to Deactivate' : '🚨 Activate Emergency'}
+                            </button>
+                        </div>`;
+                
+                // Show achieved rewards
+                if (achievedRewards.length > 0) {
+                    html += `<div class="card" style="cursor: default; background: linear-gradient(135deg, #a8edea, #fed6e3);">
+                                <h3 style="margin: 0 0 10px 0;">🎁 Your Rewards</h3>
+                                <div style="display: grid; gap: 8px;">
+                                    ${achievedRewards.map(level => {
+                                        const reward = GRATITUDE_TIERS.find(t => t.level === level);
+                                        return `<div style="background: white; padding: 10px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                                            <span style="font-size: 14px;">${reward.icon} ${reward.reward}</span>
+                                            <span style="font-size: 12px; color: #28a745; font-weight: bold;">✓ Earned</span>
+                                        </div>`;
+                                    }).join('')}
+                                </div>
+                            </div>`;
+                }
             }
             
             // QR Meal tracker for staff
@@ -1829,6 +2240,14 @@
 
             // VENDOR options
             if (role === 'VENDOR') {
+                // Find vendor's own profile
+                const myVendor = state.vendors.find(v => v.id === user.vendorId) ||
+                                (state.selectedFestival?.vendors || []).find(v => v.name === user.name);
+                
+                if (myVendor) {
+                    html += renderVendorFeedbackDashboard(myVendor);
+                }
+                
                 html += `
                     <button class="btn btn-primary" onclick="state.currentScreen='vendor-detail'; render();">🛠️ Edit My Vendor</button>
                     <button class="btn btn-primary" onclick="state.currentScreen='incidents'; render();">🚨 View Incidents</button>
@@ -1839,6 +2258,34 @@
 
             // ORGANISER options
             if (role === 'ORGANISER') {
+                // Show active emergencies
+                const activeEmergencies = Object.keys(state.emergencyStatus || {}).filter(userId => state.emergencyStatus[userId]);
+                if (activeEmergencies.length > 0) {
+                    html += `<div class="card" style="cursor: default; background: linear-gradient(135deg, #ff6b6b, #ee5a6f); border: 3px solid #ff1744;">
+                                <h3 style="color: white; margin: 0 0 10px 0;">🚨 ACTIVE EMERGENCIES</h3>
+                                ${activeEmergencies.map(userId => {
+                                    const emergencyUser = users.find(u => u.id == userId);
+                                    if (!emergencyUser) return '';
+                                    return `<div style="background: rgba(255,255,255,0.2); padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+                                        <p style="color: white; font-weight: bold; margin: 0;">⚠️ ${emergencyUser.name} activated Emergency</p>
+                                        <p style="color: rgba(255,255,255,0.9); font-size: 12px; margin: 5px 0 0 0;">${emergencyUser.email} - Festival Goer</p>
+                                    </div>`;
+                                }).join('')}
+                                <button class="btn btn-light" style="width: 100%; margin-top: 10px;" onclick="state.currentScreen='map'; render();">
+                                    📍 View on Map
+                                </button>
+                            </div>`;
+                }
+                
+                html += renderMoodTrends();
+                
+                // Demo reset control for organisers
+                html += `<div class="card" style="cursor: default; background: linear-gradient(135deg, #fff3cd, #ffc107);">
+                            <h3>🎬 Demo Management</h3>
+                            <button class="btn btn-warning" style="width: 100%;" onclick="resetDemo();">🔄 Reset Demo Data</button>
+                            <p style="font-size: 12px; color: #856404; margin: 10px 0 0 0;">Clears incidents, alerts, feedback. Preserves map & vendors.</p>
+                        </div>`;
+                
                 html += `
                     <button class="btn btn-primary" onclick="state.currentScreen='alerts'; render();">📢 Manage Alerts</button>
                     <button class="btn btn-primary" onclick="state.currentScreen='incidents'; render();">🚨 Manage Incidents</button>
@@ -1849,6 +2296,26 @@
 
             // SECMED options
             if (role === 'SECURITY' || role === 'MEDIC') {
+                // Show active emergencies
+                const activeEmergencies = Object.keys(state.emergencyStatus || {}).filter(userId => state.emergencyStatus[userId]);
+                if (activeEmergencies.length > 0) {
+                    html += `<div class="card" style="cursor: default; background: linear-gradient(135deg, #ff6b6b, #ee5a6f); border: 3px solid #ff1744;">
+                                <h3 style="color: white; margin: 0 0 10px 0;">🚨 ACTIVE EMERGENCIES</h3>
+                                ${activeEmergencies.map(userId => {
+                                    const emergencyUser = users.find(u => u.id == userId);
+                                    if (!emergencyUser) return '';
+                                    return `<div style="background: rgba(255,255,255,0.2); padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+                                        <p style="color: white; font-weight: bold; margin: 0;">⚠️ ${emergencyUser.name} activated Emergency</p>
+                                        <p style="color: rgba(255,255,255,0.9); font-size: 12px; margin: 5px 0 0 0;">${emergencyUser.email} - Festival Goer</p>
+                                    </div>`;
+                                }).join('')}
+                                <button class="btn btn-light" style="width: 100%; margin-top: 10px;" onclick="state.currentScreen='map'; render();">
+                                    📍 View on Map
+                                </button>
+                            </div>`;
+                }
+                
+                html += renderMoodTrends();
                 html += `
                     <button class="btn btn-primary" onclick="state.currentScreen='incidents'; render();">🚨 Respond to Incidents</button>
                     <button class="btn btn-primary" onclick="state.currentScreen='map'; render();">🗺️ Live Map</button>
@@ -1858,6 +2325,7 @@
 
             // ADMIN options
             if (role === 'ADMIN') {
+                html += renderAdminGratitudeOversight();
                 html += `
                     <button class="btn btn-primary" onclick="state.currentScreen='user-management'; render();">👥 Manage Users</button>
                     <button class="btn btn-primary" onclick="state.currentScreen='festivals'; render();">🎉 Manage Festivals</button>
@@ -2268,6 +2736,24 @@
         /**
          * Resolves incident by ID (staff only)
          */
+        /**
+         * Resolve incident with permission check (wrapper)
+         */
+        function resolveIncidentWithPermissions(incidentId) {
+            const user = state.currentUser;
+            if (!user) {
+                alert('❌ Must be logged in');
+                return;
+            }
+            
+            if (!canUserDo('resolveIncident', user.role)) {
+                alert(`❌ ${user.role} role cannot resolve incidents\n\nOnly Security, Medical, Organisers, and Admin can resolve incidents.`);
+                return;
+            }
+            
+            resolveIncidentById(incidentId);
+        }
+
         function resolveIncidentById(id) {
             const incident = state.incidents.find(i => i.id === id);
             if (!incident) {
@@ -2495,7 +2981,108 @@
             }
         }
 
-        function leaveFeedback(vendorId, feedback, emoji) {
+        /**
+         * Toggle Emergency for Festival Goers (Alice/Frank)
+         * Stores state in shared emergencyStatus object
+         * Visible only to SecMed and Organisers
+         */
+        function toggleEmergency() {
+            const user = state.currentUser;
+            
+            if (!user || user.role.toUpperCase() !== 'USER') {
+                alert('❌ Only Festival Goers can toggle emergency');
+                return;
+            }
+            
+            // Initialize emergency status if needed
+            if (!state.emergencyStatus) state.emergencyStatus = {};
+            
+            // Toggle status
+            const currentStatus = state.emergencyStatus[user.id] || false;
+            state.emergencyStatus[user.id] = !currentStatus;
+            
+            // Save to localStorage for cross-device persistence
+            localStorage.setItem('gratifood_emergencies', JSON.stringify(state.emergencyStatus));
+            
+            // Update user in localStorage
+            user.emergencyActive = !currentStatus;
+            localStorage.setItem('gratifood_user_' + user.email, JSON.stringify(user));
+            
+            // Confirmation message
+            if (!currentStatus) {
+                alert('🚨 Emergency signal sent!\n\nSecMed and Organisers have been notified and can see your location on the map.');
+            } else {
+                alert('✅ Emergency deactivated\n\nYour emergency signal has been turned off.');
+            }
+            
+            console.log('🚨 Emergency toggled:', {user: user.name, active: !currentStatus});
+            render();
+        }
+
+        /**
+         * Simulated purchase (demo only - no real payments)
+         * @param {String} vendorId - Vendor ID
+         * @param {String} itemName - Item name (optional, for display)
+         * @param {Number} price - Price (optional, for display)
+         */
+        function makePurchase(vendorId, itemName = 'Item', price = 0) {
+            const user = state.currentUser;
+            
+            if (!user || user.role.toUpperCase() !== 'USER') {
+                alert('❌ Only festival goers can make purchases');
+                return;
+            }
+            
+            // Find vendor
+            const vendor = state.vendors.find(v => v.id === vendorId) || 
+                          (state.selectedFestival?.vendors || []).find(v => v.id === vendorId);
+            
+            if (!vendor) {
+                alert('❌ Vendor not found');
+                return;
+            }
+            
+            // Track purchase
+            if (!user.purchases) user.purchases = [];
+            user.purchases.push({
+                vendorId: vendorId,
+                vendorName: vendor.name,
+                item: itemName,
+                price: price,
+                timestamp: Date.now()
+            });
+            
+            // Award points for purchase
+            const purchasePoints = 10;
+            if (!user.points) user.points = 0;
+            user.points += purchasePoints;
+            
+            // Check for rewards
+            checkGratitudeRewards(user);
+            
+            // Success message
+            alert(`✅ Demo Purchase Complete!\n\n${itemName} from ${vendor.name}\n+${purchasePoints} points\n\nTotal: ${user.points} points\n\nYou can now leave feedback!`);
+            
+            console.log('✅ Purchase recorded:', {vendor: vendor.name, item: itemName, points: purchasePoints});
+            
+            // Enable feedback for this vendor
+            if (!user.purchasedVendors) user.purchasedVendors = [];
+            if (!user.purchasedVendors.includes(vendorId)) {
+                user.purchasedVendors.push(vendorId);
+            }
+            
+            render();
+        }
+
+        /**
+         * Leave gratitude feedback with emoji, vibe rating, and PRESET text
+         * Requires prior purchase from vendor
+         * @param {String} vendorId - Vendor ID
+         * @param {String} feedback - PRESET feedback text (from dropdown)
+         * @param {String} emoji - Emoji reaction (optional)
+         * @param {Number} vibeRating - Vibe rating 1-5 (required)
+         */
+        function leaveFeedback(vendorId, feedback = '', emoji = '', vibeRating = 3) {
             const user = state.currentUser;
             
             if (!user || user.role.toUpperCase() !== 'USER') {
@@ -2503,61 +3090,157 @@
                 return;
             }
             
-            // Find vendor
+            // Check if user has made a purchase from this vendor
+            if (!user.purchasedVendors || !user.purchasedVendors.includes(vendorId)) {
+                alert('❌ You must make a purchase before leaving feedback!\n\nClick "Make Purchase (Demo)" first.');
+                return;
+            }
+            
+            // Find vendor in shared state
             const vendor = state.vendors.find(v => v.id === vendorId) || 
                           (state.selectedFestival?.vendors || []).find(v => v.id === vendorId) ||
                           state.festivals[0]?.vendors.find(v => v.id === vendorId);
             
             if (!vendor) {
-                alert('❌ Vendor not found or not visited');
+                alert('❌ Vendor not found');
                 return;
             }
             
             // Initialize user points if not present
             if (!user.points) user.points = 0;
             
-            // Award points
+            // Award points based on interaction
             let pointsEarned = 0;
             if (feedback && feedback.trim()) pointsEarned += 5;
             if (emoji) pointsEarned += 2;
+            if (vibeRating) pointsEarned += 3;
             
             user.points += pointsEarned;
             
-            // Add feedback to vendor
+            // Initialize vendor feedback arrays
             if (!vendor.userFeedback) vendor.userFeedback = [];
-            vendor.userFeedback.push({
-                user: user.name,
+            if (!vendor.emojiStream) vendor.emojiStream = [];
+            if (!vendor.vibeRatings) vendor.vibeRatings = [];
+            
+            // Create feedback entry (shared state)
+            const feedbackEntry = {
+                id: `feedback_${Date.now()}`,
+                userId: user.id || user.email,
+                userName: user.name,
                 feedback: feedback || '',
                 emoji: emoji || '',
+                vibeRating: vibeRating || 3,
                 points: pointsEarned,
-                timestamp: Date.now()
-            });
+                timestamp: Date.now(),
+                vendorId: vendorId
+            };
+            
+            // Add to vendor's feedback (persistent)
+            vendor.userFeedback.push(feedbackEntry);
+            
+            // Add to emoji stream (for live display - last 10)
+            if (emoji) {
+                vendor.emojiStream.unshift({
+                    emoji: emoji,
+                    userName: user.name,
+                    timestamp: Date.now()
+                });
+                vendor.emojiStream = vendor.emojiStream.slice(0, 10); // Keep last 10
+            }
+            
+            // Add to vibe ratings
+            vendor.vibeRatings.push(vibeRating);
+            
+            // Recalculate average vibe score
+            const avgVibe = vendor.vibeRatings.reduce((a, b) => a + b, 0) / vendor.vibeRatings.length;
+            vendor.averageVibeScore = parseFloat(avgVibe.toFixed(1));
+            
+            // Add to global gratitude entries (for admin oversight)
+            if (!state.gratitudeEntries) state.gratitudeEntries = [];
+            state.gratitudeEntries.push(feedbackEntry);
             
             // Check for rewards
             checkGratitudeRewards(user);
             
-            alert(`✅ Feedback submitted!\n+${pointsEarned} Gratitude Points\nTotal: ${user.points} points`);
-            console.log('✅ Feedback recorded:', vendorId, pointsEarned, 'points');
+            // Success message with visible point increment
+            alert(`✅ Feedback submitted!\n\n` +
+                  `${emoji} Vibe: ${vibeRating}/5 stars\n` +
+                  `+${pointsEarned} Gratitude Points earned\n` +
+                  `Total: ${user.points} points`);
+            
+            console.log('✅ Gratitude feedback:', {vendor: vendor.name, points: pointsEarned, vibe: vibeRating});
             render();
         }
 
         /**
-         * Check if user achieved gratitude rewards
+         * Redeem reward (Festival Goer only - demo)
+         * @param {Number} rewardLevel - Reward tier level (1-4)
+         */
+        function redeemReward(rewardLevel) {
+            const user = state.currentUser;
+            
+            if (!user || user.role.toUpperCase() !== 'USER') {
+                alert('❌ Only festival goers can redeem rewards');
+                return;
+            }
+            
+            const reward = GRATITUDE_TIERS.find(t => t.level === rewardLevel);
+            if (!reward) {
+                alert('❌ Reward not found');
+                return;
+            }
+            
+            // Check if user has enough points
+            if (user.points < reward.points) {
+                alert(`❌ Not enough points!\n\nYou need ${reward.points} points to redeem ${reward.reward}\nYou currently have ${user.points} points`);
+                return;
+            }
+            
+            // Check if already redeemed
+            if (!user.redeemedRewards) user.redeemedRewards = [];
+            if (user.redeemedRewards.includes(rewardLevel)) {
+                alert(`⚠️ You've already redeemed this reward!\n\n${reward.icon} ${reward.reward}\n\nChoose a different reward.`);
+                return;
+            }
+            
+            // Deduct points
+            user.points -= reward.points;
+            
+            // Mark as redeemed
+            user.redeemedRewards.push(rewardLevel);
+            
+            // Log redemption (for vendor tracking in real system)
+            if (!state.rewardRedemptions) state.rewardRedemptions = [];
+            state.rewardRedemptions.push({
+                userId: user.id || user.email,
+                userName: user.name,
+                reward: reward.reward,
+                points: reward.points,
+                timestamp: Date.now()
+            });
+            
+            // Success notification
+            alert(`✅ REWARD REDEEMED!\n\n${reward.icon} ${reward.reward}\n\n-${reward.points} points\nRemaining: ${user.points} points\n\nShow this to any vendor (demo)`);
+            
+            console.log('✅ Reward redeemed:', {user: user.name, reward: reward.reward, points: reward.points});
+            render();
+        }
+
+        /**
+         * Check if user achieved gratitude rewards - shows celebration
          */
         function checkGratitudeRewards(user) {
             if (!user.points) return;
             
-            const rewards = [
-                { points: 50, reward: 'Free Coffee', icon: '☕', achieved: 'achievedCoffee' },
-                { points: 120, reward: 'Free Dessert', icon: '🍰', achieved: 'achievedDessert' },
-                { points: 250, reward: '£5 Off Meal', icon: '💷', achieved: 'achievedDiscount' },
-                { points: 500, reward: 'Free Main Meal', icon: '🍽️', achieved: 'achievedMeal' }
-            ];
+            if (!user.achievedRewards) user.achievedRewards = [];
             
-            rewards.forEach(r => {
-                if (user.points >= r.points && !user[r.achieved]) {
-                    user[r.achieved] = true;
-                    alert(`🏆 REWARD UNLOCKED!\n\n${r.icon} ${r.reward}\n\nRedeem at any participating vendor!`);
+            GRATITUDE_TIERS.forEach(tier => {
+                if (user.points >= tier.points && !user.achievedRewards.includes(tier.level)) {
+                    user.achievedRewards.push(tier.level);
+                    
+                    // 🎉 CELEBRATION ALERT
+                    alert(`🎉 REWARD UNLOCKED! 🎉\n\n${tier.icon} ${tier.reward}\n\nYou've earned ${tier.points} points!\n\nShow this at participating vendors (demo)`);
+                    console.log(`🏆 Reward unlocked: ${tier.reward}`);
                 }
             });
         }
@@ -2830,13 +3513,14 @@
             const canSeeMedicalIncidents = ['ORGANISER', 'SECURITY', 'MEDIC', 'ADMIN'].includes(role);
             const canSeeLiveSecurity = ['ORGANISER', 'ADMIN'].includes(role);
             const canSeeAll = ['ORGANISER', 'ADMIN'].includes(role);
+            const canSeeLiveMedical = ['VENDOR', 'ORGANISER', 'SECURITY', 'MEDIC', 'ADMIN'].includes(role);
             
             let html = `
                 <div class="card" style="cursor: default;">
                     <h3>🗺️ Festival Map</h3>
                     <p style="color: #666; margin-bottom: 15px;">Interactive map with all festival locations</p>
                     
-                    <div style="
+                    <div id="festival-map" style="
                         position: relative;
                         width: 600px;
                         height: 400px;
@@ -2888,31 +3572,220 @@
                             bgColor = 'gray'; emoji = '📍'; title = 'Location';
                     }
                     
+                    // Pin icon with visible label below
+                    html += `
+                        <div style="
+                            position: absolute;
+                            left: ${pin.x}px;
+                            top: ${pin.y}px;
+                            transform: translate(-50%, -50%);
+                            text-align: center;
+                        ">
+                            <div 
+                                title="${title}"
+                                style="
+                                    width: 25px;
+                                    height: 25px;
+                                    background: ${bgColor};
+                                    border-radius: 50%;
+                                    display: flex;
+                                    align-items: center;
+                                    justify-content: center;
+                                    cursor: pointer;
+                                    font-size: 14px;
+                                    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                                    transition: transform 0.2s;
+                                    margin: 0 auto 3px auto;
+                                "
+                                onmouseover="this.style.transform='scale(1.3)'"
+                                onmouseout="this.style.transform='scale(1)'"
+                            >${emoji}</div>
+                            <div style="
+                                font-size: 9px;
+                                font-weight: bold;
+                                color: #333;
+                                background: rgba(255,255,255,0.9);
+                                padding: 2px 4px;
+                                border-radius: 3px;
+                                white-space: nowrap;
+                                box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+                            ">${title}</div>
+                        </div>
+                    `;
+                });
+            }
+            
+            // ========== VENDOR PINS WITH HIGHLIGHTING ==========
+            const vendors = state.vendors.concat(state.selectedFestival?.vendors || []);
+            const selectedVendorId = state.selectedVendor?.id;
+            
+            vendors.forEach(vendor => {
+                if (!vendor.locationCoords && !vendor.location) return;
+                const coords = vendor.locationCoords || vendor.location;
+                const isSelected = vendor.id === selectedVendorId;
+                
+                html += `
+                    <div 
+                        id="vendor-pin-${vendor.id}"
+                        title="${vendor.name}"
+                        style="
+                            position: absolute;
+                            left: ${coords.x}px;
+                            top: ${coords.y}px;
+                            width: ${isSelected ? '40px' : '30px'};
+                            height: ${isSelected ? '40px' : '30px'};
+                            background: ${isSelected ? '#ff1744' : '#4caf50'};
+                            border: ${isSelected ? '3px solid #fff' : '2px solid #fff'};
+                            border-radius: 50%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            cursor: pointer;
+                            font-size: ${isSelected ? '20px' : '16px'};
+                            box-shadow: ${isSelected ? '0 4px 12px rgba(255,23,68,0.6)' : '0 2px 6px rgba(0,0,0,0.3)'};
+                            transform: translate(-50%, -50%);
+                            transition: all 0.3s ease;
+                            z-index: ${isSelected ? '100' : '10'};
+                        "
+                        onclick="selectVendor(${JSON.stringify(vendor).replace(/"/g, '&quot;')})"
+                        onmouseover="if(!${isSelected}) this.style.transform='translate(-50%, -50%) scale(1.2)'"
+                        onmouseout="if(!${isSelected}) this.style.transform='translate(-50%, -50%) scale(1)'"
+                    >🏪</div>
+                `;
+            });
+            
+            // ========== MOVING MEDICAL STAFF ICONS (DEMO) ==========
+            // Only show if user can see live medical
+            if (canSeeLiveMedical) {
+                html += `
+                    <!-- Medical Staff 1: Moving horizontally -->
+                    <div 
+                        id="medical-staff-1"
+                        class="moving-medical-icon"
+                        title="Medical Staff"
+                        style="
+                            position: absolute;
+                            left: 100px;
+                            top: 150px;
+                            width: 35px;
+                            height: 35px;
+                            background: #00e676;
+                            border: 3px solid #fff;
+                            border-radius: 50%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 20px;
+                            box-shadow: 0 4px 10px rgba(0,230,118,0.6);
+                            transform: translate(-50%, -50%);
+                            z-index: 50;
+                            transition: left 3s ease-in-out, top 3s ease-in-out;
+                        "
+                    >✚</div>
+                    
+                    <!-- Medical Staff 2: Moving vertically -->
+                    <div 
+                        id="medical-staff-2"
+                        class="moving-medical-icon"
+                        title="Medical Staff"
+                        style="
+                            position: absolute;
+                            left: 400px;
+                            top: 100px;
+                            width: 35px;
+                            height: 35px;
+                            background: #00e676;
+                            border: 3px solid #fff;
+                            border-radius: 50%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 20px;
+                            box-shadow: 0 4px 10px rgba(0,230,118,0.6);
+                            transform: translate(-50%, -50%);
+                            z-index: 50;
+                            transition: left 3s ease-in-out, top 3s ease-in-out;
+                        "
+                    >✚</div>
+                `;
+            }
+            
+            // ========== EMERGENCY MARKERS (SECMED/ORGANISER ONLY) ==========
+            // Show emergency markers for active emergencies
+            if (['SECURITY', 'MEDIC', 'ORGANISER', 'ADMIN'].includes(role)) {
+                const emergencyStatus = state.emergencyStatus || {};
+                Object.keys(emergencyStatus).forEach(userId => {
+                    if (!emergencyStatus[userId]) return; // Skip inactive
+                    
+                    const emergencyUser = users.find(u => u.id == userId);
+                    if (!emergencyUser) return;
+                    
+                    // Random position for demo (in real app, would be actual GPS)
+                    const coords = emergencyUser.locationCoords || {x: 250 + (userId * 50), y: 200 + (userId * 30)};
+                    
                     html += `
                         <div 
-                            title="${title}"
+                            title="🚨 EMERGENCY: ${emergencyUser.name}"
                             style="
                                 position: absolute;
-                                left: ${pin.x}px;
-                                top: ${pin.y}px;
-                                width: 25px;
-                                height: 25px;
-                                background: ${bgColor};
+                                left: ${coords.x}px;
+                                top: ${coords.y}px;
+                                width: 50px;
+                                height: 50px;
+                                background: #ff1744;
+                                border: 4px solid #fff;
                                 border-radius: 50%;
                                 display: flex;
                                 align-items: center;
                                 justify-content: center;
-                                cursor: pointer;
-                                font-size: 14px;
-                                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                                font-size: 28px;
+                                box-shadow: 0 0 20px rgba(255,23,68,0.8);
                                 transform: translate(-50%, -50%);
-                                transition: transform 0.2s;
+                                z-index: 200;
+                                animation: pulse-emergency 1.5s ease-in-out infinite;
                             "
-                            onmouseover="this.style.transform='translate(-50%, -50%) scale(1.3)'"
-                            onmouseout="this.style.transform='translate(-50%, -50%) scale(1)'"
-                        >${emoji}</div>
+                        >⚠️</div>
+                        <style>
+                            @keyframes pulse-emergency {
+                                0%, 100% { transform: translate(-50%, -50%) scale(1); }
+                                50% { transform: translate(-50%, -50%) scale(1.1); }
+                            }
+                        </style>
                     `;
                 });
+            }
+            
+            // Render active incidents on map (using role-based visibility)
+                            z-index: 50;
+                            transition: left 3s ease-in-out, top 3s ease-in-out;
+                        "
+                    >✚</div>
+                    
+                    <!-- Medical Staff 2: Moving vertically -->
+                    <div 
+                        id="medical-staff-2"
+                        class="moving-medical-icon"
+                        title="Medical Staff"
+                        style="
+                            position: absolute;
+                            left: 400px;
+                            top: 100px;
+                            width: 35px;
+                            height: 35px;
+                            background: #00e676;
+                            border: 3px solid #fff;
+                            border-radius: 50%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 20px;
+                            box-shadow: 0 4px 10px rgba(0,230,118,0.6);
+                            transform: translate(-50%, -50%);
+                            z-index: 50;
+                            transition: left 3s ease-in-out, top 3s ease-in-out;
+                        "
+                    >✚</div>
+                `;
             }
             
             // Render active incidents on map (using role-based visibility)
@@ -3258,6 +4131,173 @@
          * @param {Object} user - Current user object
          * @returns {String} HTML string of quick action panel
          */
+        // ==================== GRATITUDE & MOOD FEEDBACK DASHBOARDS ====================
+
+        /**
+         * Render vendor's emoji stream and feedback stats (VENDOR view)
+         */
+        function renderVendorFeedbackDashboard(vendor) {
+            if (!vendor) return '';
+            
+            const emojiStream = vendor.emojiStream || [];
+            const avgVibe = vendor.averageVibeScore || 0;
+            const feedbackCount = (vendor.userFeedback || []).length;
+            const recentFeedback = (vendor.userFeedback || []).slice(-5).reverse();
+            
+            return `
+                <div class="card" style="cursor: default; background: linear-gradient(135deg, #a8edea, #fed6e3);">
+                    <h3>💝 Your Gratitude Dashboard</h3>
+                    
+                    <div class="grid-2" style="gap: 15px; margin: 15px 0;">
+                        <div style="text-align: center; background: rgba(255,255,255,0.7); padding: 15px; border-radius: 8px;">
+                            <p style="font-size: 36px; margin: 0;">${avgVibe.toFixed(1)}</p>
+                            <p style="font-size: 14px; color: #666; margin: 5px 0;">Average Vibe</p>
+                            <p style="font-size: 12px; color: #999;">out of 5 stars</p>
+                        </div>
+                        <div style="text-align: center; background: rgba(255,255,255,0.7); padding: 15px; border-radius: 8px;">
+                            <p style="font-size: 36px; margin: 0;">${feedbackCount}</p>
+                            <p style="font-size: 14px; color: #666; margin: 5px 0;">Total Feedback</p>
+                            <p style="font-size: 12px; color: #999;">from festival goers</p>
+                        </div>
+                    </div>
+                    
+                    ${emojiStream.length > 0 ? `
+                        <div style="background: rgba(255,255,255,0.7); padding: 15px; border-radius: 8px; margin: 10px 0;">
+                            <h4 style="margin: 0 0 10px 0;">🎭 Live Emoji Stream</h4>
+                            <div style="font-size: 24px; display: flex; gap: 5px; flex-wrap: wrap;">
+                                ${emojiStream.map(e => `<span title="${e.userName} - ${new Date(e.timestamp).toLocaleTimeString()}">${e.emoji}</span>`).join('')}
+                            </div>
+                        </div>
+                    ` : '<p style="color: #666; text-align: center; margin: 10px 0;">No emoji reactions yet</p>'}
+                    
+                    ${recentFeedback.length > 0 ? `
+                        <div style="background: rgba(255,255,255,0.7); padding: 15px; border-radius: 8px; margin: 10px 0;">
+                            <h4 style="margin: 0 0 10px 0;">💬 Recent Feedback</h4>
+                            ${recentFeedback.map(f => `
+                                <div style="border-bottom: 1px solid #ddd; padding: 8px 0;">
+                                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                                        <strong>${f.userName}</strong>
+                                        <span style="color: #ff6b6b;">${'⭐'.repeat(f.vibeRating || 3)}</span>
+                                    </div>
+                                    ${f.emoji ? `<span style="font-size: 18px;">${f.emoji}</span>` : ''}
+                                    ${f.feedback ? `<p style="margin: 5px 0; font-size: 14px; color: #666;">"${f.feedback}"</p>` : ''}
+                                    <small style="color: #999;">${new Date(f.timestamp).toLocaleString()}</small>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        /**
+         * Render aggregated mood trends across all vendors (ORGANISER/SECMED view)
+         */
+        function renderMoodTrends() {
+            const allVendors = state.vendors.concat(state.selectedFestival?.vendors || []);
+            const vendorsWithFeedback = allVendors.filter(v => v.averageVibeScore);
+            
+            // Calculate global average
+            const globalAvg = vendorsWithFeedback.length > 0 ?
+                vendorsWithFeedback.reduce((sum, v) => sum + v.averageVibeScore, 0) / vendorsWithFeedback.length :
+                0;
+            
+            // Find low vibe vendors (< 3.0)
+            const lowVibeVendors = vendorsWithFeedback.filter(v => v.averageVibeScore < 3.0);
+            
+            // Sort by vibe score
+            const sortedVendors = [...vendorsWithFeedback].sort((a, b) => b.averageVibeScore - a.averageVibeScore);
+            
+            return `
+                <div class="card" style="cursor: default; background: linear-gradient(135deg, #ffecd2, #fcb69f);">
+                    <h3>📊 Festival Mood Trends</h3>
+                    
+                    <div style="text-align: center; background: rgba(255,255,255,0.8); padding: 20px; border-radius: 8px; margin: 15px 0;">
+                        <p style="font-size: 48px; margin: 0;">${globalAvg.toFixed(1)}</p>
+                        <p style="font-size: 16px; color: #666; margin: 5px 0;">Overall Festival Vibe</p>
+                        <p style="font-size: 13px; color: #999;">across ${vendorsWithFeedback.length} vendors</p>
+                    </div>
+                    
+                    ${lowVibeVendors.length > 0 ? `
+                        <div style="background: #fff3cd; border: 2px solid #ffc107; padding: 15px; border-radius: 8px; margin: 10px 0;">
+                            <h4 style="margin: 0 0 10px 0; color: #856404;">⚠️ Low Vibe Alert (< 3.0)</h4>
+                            ${lowVibeVendors.map(v => `
+                                <div style="margin: 8px 0;">
+                                    <strong>${v.name}</strong>: ${v.averageVibeScore.toFixed(1)}/5 
+                                    <span style="color: #dc3545; font-weight: bold;">↓ Needs attention</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : '<p style="color: green; text-align: center;">✅ All vendors have healthy vibe scores!</p>'}
+                    
+                    <div style="background: rgba(255,255,255,0.8); padding: 15px; border-radius: 8px; margin: 10px 0;">
+                        <h4 style="margin: 0 0 10px 0;">Top Vendors by Vibe</h4>
+                        ${sortedVendors.slice(0, 5).map((v, i) => `
+                            <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #ddd;">
+                                <span>${i + 1}. ${v.name}</span>
+                                <span style="font-weight: bold; color: ${v.averageVibeScore >= 4 ? '#28a745' : v.averageVibeScore >= 3 ? '#ffc107' : '#dc3545'};">
+                                    ${v.averageVibeScore.toFixed(1)} ⭐
+                                </span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * Render admin oversight dashboard (ADMIN view)
+         */
+        function renderAdminGratitudeOversight() {
+            const entries = state.gratitudeEntries || [];
+            const recentEntries = entries.slice(-20).reverse();
+            const totalPoints = entries.reduce((sum, e) => sum + e.points, 0);
+            
+            return `
+                <div class="card" style="cursor: default; background: linear-gradient(135deg, #e0c3fc, #8ec5fc);">
+                    <h3>👁️ Admin Gratitude Oversight</h3>
+                    
+                    <div class="grid-3" style="gap: 10px; margin: 15px 0;">
+                        <div style="text-align: center; background: rgba(255,255,255,0.8); padding: 15px; border-radius: 8px;">
+                            <p style="font-size: 28px; margin: 0;">${entries.length}</p>
+                            <p style="font-size: 12px; color: #666;">Total Entries</p>
+                        </div>
+                        <div style="text-align: center; background: rgba(255,255,255,0.8); padding: 15px; border-radius: 8px;">
+                            <p style="font-size: 28px; margin: 0;">${totalPoints}</p>
+                            <p style="font-size: 12px; color: #666;">Points Issued</p>
+                        </div>
+                        <div style="text-align: center; background: rgba(255,255,255,0.8); padding: 15px; border-radius: 8px;">
+                            <p style="font-size: 28px; margin: 0;">${new Set(entries.map(e => e.userId)).size}</p>
+                            <p style="font-size: 12px; color: #666;">Active Users</p>
+                        </div>
+                    </div>
+                    
+                    <div style="background: rgba(255,255,255,0.8); padding: 15px; border-radius: 8px; margin: 10px 0; max-height: 400px; overflow-y: auto;">
+                        <h4 style="margin: 0 0 10px 0;">Recent Gratitude Activity</h4>
+                        ${recentEntries.length > 0 ? recentEntries.map(e => {
+                            const vendor = state.vendors.find(v => v.id === e.vendorId) || 
+                                         (state.selectedFestival?.vendors || []).find(v => v.id === e.vendorId);
+                            return `
+                                <div style="border-bottom: 1px solid #ddd; padding: 10px 0; font-size: 13px;">
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <strong>${e.userName} → ${vendor?.name || 'Unknown Vendor'}</strong>
+                                        <span style="color: #28a745; font-weight: bold;">+${e.points} pts</span>
+                                    </div>
+                                    <div style="margin: 5px 0;">
+                                        ${e.emoji} Vibe: ${e.vibeRating}/5 stars
+                                    </div>
+                                    ${e.feedback ? `<p style="margin: 5px 0; color: #666;">"${e.feedback}"</p>` : ''}
+                                    <small style="color: #999;">${new Date(e.timestamp).toLocaleString()}</small>
+                                </div>
+                            `;
+                        }).join('') : '<p style="text-align: center; color: #999;">No gratitude entries yet</p>'}
+                    </div>
+                </div>
+            `;
+        }
+
+        // ==================== MODULE 6: ADDITIONAL FEATURES FOR INTERACTIVITY ====================
+
         function renderQuickActionPanel(user) {
             if (!user) return '';
             
@@ -3434,18 +4474,34 @@
         // ==================== UNIVERSAL LOGOUT (MODULE 1) ====================
         // Updated logout function - clears all state and returns to login
         function logoutUniversal() {
-            if (!confirm('Are you sure you want to logout?')) return;
+            console.log('🚪 logoutUniversal called');
             
+            if (!confirm('Are you sure you want to logout?')) {
+                console.log('🚪 Logout cancelled by user');
+                return;
+            }
+            
+            console.log('🚪 Proceeding with logout...');
+            
+            // Full session reset
             state.currentUser = null;
             state.currentRole = null;
             state.mode = null;
             state.selectedFestival = null;
             state.selectedVendor = null;
+            state.selectedIncident = null;
+            state.selectedAlert = null;
+            state.selectedIncidentType = null;
+            state.actionItemType = null;
+            state.actionItemId = null;
+            state.searchResults = [];
             state.currentScreen = 'mode-select';
             
-            console.log('👋 User logged out');
+            console.log('👋 User logged out - session fully reset');
+            console.log('📍 Current screen:', state.currentScreen);
             updateModeBadge();
             render();
+            console.log('✅ Logout complete');
         }
 
         // ==================== MAIN RENDER (integration.js module) ====================
@@ -3719,166 +4775,176 @@
                     }
                 }, 10);
             }
+            
+            // Restart medical animation if on map screen
+            if (state.currentScreen === 'map' && typeof checkAndStartMedicalAnimation !== 'undefined') {
+                checkAndStartMedicalAnimation();
+            }
         }
 
         // ==================== INITIALIZE (core.js module) ====================
         // ==================== DEMO INITIALIZATION & WEATHER SYSTEM ====================
 
         /**
-         * Initializes demo with all accounts, vendors, map, stages, tents
+         * Pre-populates the shared world with realistic demo data
+         * Does NOT create separate environment - adds to existing state
          */
         function initDemo() {
-            // Reset all state
-            state.currentScreen = 'login';
-            state.mode = null;
-            state.currentUser = null;
-            state.currentRole = null;
-            state.selectedFestival = null;
-            state.selectedVendor = null;
-            state.weatherScenario = 0;
+            console.log('🎬 Initializing demo data in shared world...');
             
-            // Initialize demo users (5 accounts - all roles)
-            state.users = [
-                {
-                    id: 1,
-                    name: 'Alice (Festival Goer)',
-                    role: 'USER',
-                    email: 'alice@demo.com',
-                    pass: 'user123',
-                    points: 150,
-                    liveLocationEmergency: false,
-                    locationCoords: null,
-                    claimedMeals: 0,
-                    weatherBanner: null,
-                    weatherPromotion: null,
-                    hydrationReminder: false
-                },
-                {
-                    id: 2,
-                    name: 'Bob (Vendor)',
-                    role: 'VENDOR',
-                    email: 'bob@demo.com',
-                    pass: 'vendor123',
-                    vendorId: 'vendor_101',
-                    points: 0,
-                    liveLocationEmergency: false,
-                    locationCoords: null,
-                    claimedMeals: 0,
-                    weatherBanner: null,
-                    weatherPromotion: null,
-                    hydrationReminder: false
-                },
-                {
-                    id: 3,
-                    name: 'Charlie (Security)',
-                    role: 'SECURITY',
-                    email: 'charlie@demo.com',
-                    pass: 'sec123',
-                    points: 0,
-                    liveLocationEmergency: false,
-                    locationCoords: null,
-                    claimedMeals: 0,
-                    weatherBanner: null,
-                    weatherPromotion: null,
-                    hydrationReminder: false
-                },
-                {
-                    id: 4,
-                    name: 'Diana (Organiser)',
-                    role: 'ORGANISER',
-                    email: 'diana@demo.com',
-                    pass: 'org123',
-                    points: 0,
-                    liveLocationEmergency: false,
-                    locationCoords: null,
-                    claimedMeals: 0,
-                    weatherBanner: null,
-                    weatherPromotion: null,
-                    hydrationReminder: false
-                },
-                {
-                    id: 5,
-                    name: 'Eve (Admin)',
-                    role: 'ADMIN',
-                    email: 'eve@demo.com',
-                    pass: 'admin123',
-                    points: 0,
-                    liveLocationEmergency: false,
-                    locationCoords: null,
-                    claimedMeals: 0,
-                    weatherBanner: null,
-                    weatherPromotion: null,
-                    hydrationReminder: false
-                }
-            ];
-            
-            // Initialize demo festival with vendors
-            state.festivals = [{
-                id: 'demo_festival_1',
-                name: 'GratiFood Demo Festival',
-                location: 'Somerset, UK',
-                dates: 'July 20-23, 2025',
-                image: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200"><rect fill="%234caf50" width="400" height="200"/><text x="50%" y="50%" text-anchor="middle" fill="white" font-size="24">Demo Festival</text></svg>',
-                mapPins: mapPins,
-                vendors: [
+            // Pre-populate sample incidents (realistic scenario)
+            if (state.incidents.length === 0) {
+                state.incidents = [
                     {
-                        id: 'vendor_101',
-                        name: 'Falafel Paradise',
-                        cuisine: 'Middle Eastern',
-                        location: {x: 300, y: 250},
-                        locationCoords: {x: 300, y: 250},
-                        menu: ['Falafel Wrap', 'Hummus Bowl', 'Shawarma'],
-                        prices: {
-                            'Falafel Wrap': 6,
-                            'Hummus Bowl': 5,
-                            'Shawarma': 7
-                        },
-                        photos: [],
-                        image: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120"><rect fill="%23ff9800" width="200" height="120"/><text x="50%" y="50%" text-anchor="middle" fill="white" font-size="16">Falafel</text></svg>',
-                        vibeScore: '8.5/10',
-                        queueSpeed: 'Fast',
-                        reviews: [],
-                        gratitudeRewardsEnabled: true
+                        id: 'demo_incident_1',
+                        type: 'FIRE',
+                        description: 'Small cooking fire at Pizza Magic vendor',
+                        reportedBy: 'Bob',
+                        reporterRole: 'VENDOR',
+                        timestamp: Date.now() - (45 * 60 * 1000), // 45 min ago
+                        locationCoords: {x: 350, y: 280},
+                        resolved: true,
+                        resolvedBy: 'Dave',
+                        resolvedAt: Date.now() - (30 * 60 * 1000),
+                        festivalId: state.selectedFestival?.id
                     },
                     {
-                        id: 'vendor_102',
-                        name: 'Pizza Magic',
-                        cuisine: 'Italian',
-                        location: {x: 350, y: 280},
-                        locationCoords: {x: 350, y: 280},
-                        menu: ['Margherita', 'Pepperoni', 'Vegetarian'],
-                        prices: {
-                            'Margherita': 8,
-                            'Pepperoni': 9,
-                            'Vegetarian': 8
-                        },
-                        photos: [],
-                        image: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="120"><rect fill="%23f44336" width="200" height="120"/><text x="50%" y="50%" text-anchor="middle" fill="white" font-size="16">Pizza</text></svg>',
-                        vibeScore: '9.2/10',
-                        queueSpeed: 'Medium',
-                        reviews: [],
-                        gratitudeRewardsEnabled: true
+                        id: 'demo_incident_2',
+                        type: 'MEDICAL',
+                        description: 'Minor dehydration case',
+                        reportedBy: 'Medical Staff',
+                        reporterRole: 'MEDIC',
+                        timestamp: Date.now() - (20 * 60 * 1000), // 20 min ago
+                        locationCoords: {x: 150, y: 150},
+                        resolved: false,
+                        festivalId: state.selectedFestival?.id
                     }
-                ]
-            }];
+                ];
+                console.log('✅ Added 2 demo incidents');
+            }
             
-            // Initialize empty incidents and alerts
-            state.incidents = [];
-            state.alerts = [];
-            state.liveEmergencyUsers = [];
+            // Pre-populate sample gratitude feedback
+            const demoVendor = state.vendors[0] || (state.selectedFestival?.vendors || [])[0];
+            if (demoVendor && (!demoVendor.userFeedback || demoVendor.userFeedback.length === 0)) {
+                demoVendor.userFeedback = [
+                    {
+                        id: 'demo_feedback_1',
+                        userId: 1,
+                        userName: 'Alice',
+                        feedback: 'Amazing falafel! Best at the festival',
+                        emoji: '😋',
+                        vibeRating: 5,
+                        points: 10,
+                        timestamp: Date.now() - (2 * 60 * 60 * 1000),
+                        vendorId: demoVendor.id
+                    },
+                    {
+                        id: 'demo_feedback_2',
+                        userId: 6,
+                        userName: 'Frank',
+                        feedback: 'Good food, friendly service',
+                        emoji: '👍',
+                        vibeRating: 4,
+                        points: 10,
+                        timestamp: Date.now() - (1 * 60 * 60 * 1000),
+                        vendorId: demoVendor.id
+                    }
+                ];
+                
+                demoVendor.emojiStream = [
+                    {emoji: '😋', userName: 'Alice', timestamp: Date.now() - (2 * 60 * 60 * 1000)},
+                    {emoji: '👍', userName: 'Frank', timestamp: Date.now() - (1 * 60 * 60 * 1000)}
+                ];
+                
+                demoVendor.vibeRatings = [5, 4];
+                demoVendor.averageVibeScore = 4.5;
+                
+                if (!state.gratitudeEntries) state.gratitudeEntries = [];
+                state.gratitudeEntries.push(...demoVendor.userFeedback);
+                
+                console.log('✅ Added demo feedback to vendor');
+            }
             
-            console.log('✅ Demo initialized with 5 users and 2 vendors');
+            // Add demo alert (weather-based)
+            if (!state.alerts) state.alerts = [];
+            if (state.alerts.length === 0) {
+                state.alerts.push({
+                    id: 'demo_alert_1',
+                    type: 'INFO',
+                    message: '☀️ Hot weather alert: Stay hydrated! Water points marked on map.',
+                    timestamp: Date.now() - (10 * 60 * 1000),
+                    roles: ['USER', 'VENDOR', 'ORGANISER', 'SECURITY', 'MEDIC', 'ADMIN'],
+                    createdBy: 'System'
+                });
+                console.log('✅ Added demo alert');
+            }
+            
+            console.log('🎬 Demo data pre-populated in shared world');
+            alert('🎬 Demo Mode Active!\n\nRealistic incidents, feedback, and alerts have been added to the shared environment.\n\nAll users will see this data when they login.');
             render();
         }
 
         /**
-         * Resets demo to initial state
+         * Resets demo data (ADMIN/ORGANISER only)
+         * Clears incidents, emergency toggles, demo points
+         * Preserves map, vendors, weather cycle
          */
         function resetDemo() {
-            if (confirm('🎉 Reset entire demo?\n\nThis will clear all incidents, alerts, and emergency locations.')) {
-                initDemo();
-                alert('✅ Demo reset complete!');
+            const user = state.currentUser;
+            
+            // Permission check
+            if (user && !['ORGANISER', 'ADMIN'].includes(user.role?.toUpperCase())) {
+                alert('❌ Only Organisers and Admins can reset the demo');
+                return;
             }
+            
+            if (!confirm('🔄 Reset Demo Data?\n\nThis will clear:\n• All incidents\n• Emergency locations\n• Gratitude feedback\n• Alerts\n\nWeather, map, and vendors will remain.')) {
+                return;
+            }
+            
+            console.log('🔄 Resetting demo data...');
+            
+            // Clear incidents
+            state.incidents = [];
+            
+            // Clear alerts
+            state.alerts = [];
+            
+            // Clear emergency locations
+            state.liveEmergencyUsers = [];
+            if (state.users) {
+                state.users.forEach(u => {
+                    u.liveLocationEmergency = false;
+                    if (u.emergencyTimeout) {
+                        clearTimeout(u.emergencyTimeout);
+                        u.emergencyTimeout = null;
+                    }
+                });
+            }
+            
+            // Clear gratitude data
+            state.gratitudeEntries = [];
+            
+            // Clear vendor feedback
+            const allVendors = state.vendors.concat(state.selectedFestival?.vendors || []);
+            allVendors.forEach(v => {
+                v.userFeedback = [];
+                v.emojiStream = [];
+                v.vibeRatings = [];
+                v.averageVibeScore = 0;
+            });
+            
+            // Reset user points to 0
+            if (state.users) {
+                state.users.forEach(u => u.points = 0);
+            }
+            if (state.currentUser) {
+                state.currentUser.points = 0;
+            }
+            
+            console.log('✅ Demo reset complete');
+            alert('✅ Demo Reset Complete!\n\nAll incidents, alerts, feedback, and emergency locations cleared.\n\nMap, vendors, and weather cycle preserved.');
+            render();
         }
 
         /**
@@ -4010,8 +5076,63 @@
 
         // ==================== DOM READY ====================
         
+        // ========== MEDICAL STAFF ANIMATION (DEMO) ==========
+        let medicalAnimationInterval = null;
+        
+        function startMedicalStaffAnimation() {
+            // Stop any existing animation
+            if (medicalAnimationInterval) {
+                clearInterval(medicalAnimationInterval);
+            }
+            
+            let toggle = false;
+            
+            medicalAnimationInterval = setInterval(() => {
+                const staff1 = document.getElementById('medical-staff-1');
+                const staff2 = document.getElementById('medical-staff-2');
+                
+                if (!staff1 || !staff2) return; // Icons not on page
+                
+                // Toggle positions every 3 seconds
+                if (toggle) {
+                    // Medical Staff 1: Move right
+                    staff1.style.left = '500px';
+                    staff1.style.top = '150px';
+                    
+                    // Medical Staff 2: Move down
+                    staff2.style.left = '400px';
+                    staff2.style.top = '300px';
+                } else {
+                    // Medical Staff 1: Move back left
+                    staff1.style.left = '100px';
+                    staff1.style.top = '150px';
+                    
+                    // Medical Staff 2: Move back up
+                    staff2.style.left = '400px';
+                    staff2.style.top = '100px';
+                }
+                
+                toggle = !toggle;
+            }, 3000); // Move every 3 seconds
+        }
+        
+        // Start animation after each render if on map screen
+        function checkAndStartMedicalAnimation() {
+            if (state.currentScreen === 'map') {
+                setTimeout(startMedicalStaffAnimation, 100); // Wait for DOM
+            }
+        }
+        
         document.addEventListener('DOMContentLoaded', () => {
             try {
+                // Load emergency status from localStorage
+                const storedEmergencies = localStorage.getItem('gratifood_emergencies');
+                if (storedEmergencies) {
+                    state.emergencyStatus = JSON.parse(storedEmergencies);
+                } else {
+                    state.emergencyStatus = {};
+                }
+                
                 console.log('🎉 GratiFood Complete System - All Modules Loaded!');
                 console.log('📦 Modules: core.js ✓ | modeManager.js ✓ | actions.js ✓ | renderers.js ✓ | integration.js ✓');
                 console.log('📊 5 Festivals | 13 Vendors | 5 User Roles | Complete Permission System');
@@ -4020,6 +5141,7 @@
                 
                 updateModeBadge();
                 render();
+                checkAndStartMedicalAnimation();
             } catch (error) {
                 console.error('❌ CRITICAL ERROR:', error);
                 alert('ERROR: ' + error.message + '\n\nCheck console (F12) for details');
