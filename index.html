@@ -1003,64 +1003,79 @@
 
         // ==================== RENDER QR LOGIN (renderers.js module) ====================
         function renderQRLogin() {
+            // Village Fête now uses same role selection as Festival Mode
+            return renderVillageFeteRoleSelect();
+        }
+        
+        function renderVillageFeteRoleSelect() {
             return `
                 <div class="container">
                     <button class="btn btn-primary" onclick="goBack()">← Back to Mode Select</button>
                     
                     <div class="header" style="margin-top: 20px;">
-                        <h1>📱 QR Code Login</h1>
-                        <p style="font-size: 18px; margin-top: 8px;">${getModeDisplayName()}</p>
+                        <h1 style="font-size: 36px; text-align: center; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 10px;">
+                            🏘️ Village Fête
+                        </h1>
+                        <p style="font-size: 18px; text-align: center; color: #666; margin-bottom: 30px;">Select your role to begin</p>
                     </div>
 
                     <div class="card" style="cursor: default;">
-                        <h3 style="margin-bottom: 15px;">🎭 Quick Login (Demo)</h3>
-                        <p style="color: #666; margin-bottom: 20px; font-size: 14px;">
-                            For testing, click a role below to login instantly:
-                        </p>
+                        <h3 style="margin-bottom: 20px; text-align: center;">Choose Your Role</h3>
                         
-                        <div style="display: grid; gap: 10px;">
-                            <button class="btn btn-primary" style="width: 100%; text-align: left; padding: 15px;" 
-                                onclick="handleQRLoginWithRole({id:'user_' + Date.now(), name:'Alice', role:'USER', points:0, liveLocation:false})">
-                                <div style="font-size: 16px; font-weight: bold;">👤 Login as Public/Customer</div>
-                                <div style="font-size: 12px; opacity: 0.9; margin-top: 3px;">Browse & review vendors</div>
+                        <div style="display: grid; gap: 15px;">
+                            <button class="btn btn-primary" style="width: 100%; padding: 20px; font-size: 18px; text-align: left;" 
+                                onclick="selectVillageFeteRole('USER')">
+                                <div style="display: flex; align-items: center; gap: 15px;">
+                                    <span style="font-size: 32px;">👤</span>
+                                    <div>
+                                        <div style="font-weight: bold;">Festival Goer</div>
+                                        <div style="font-size: 14px; opacity: 0.9; margin-top: 3px;">Explore vendors, make purchases, earn rewards</div>
+                                    </div>
+                                </div>
                             </button>
                             
-                            <button class="btn btn-warning" style="width: 100%; text-align: left; padding: 15px;" 
-                                onclick="handleQRLoginWithRole({id:'user_' + Date.now(), name:'Bob', role:'VENDOR', vendorId:'ven_001', points:0, liveLocation:false})">
-                                <div style="font-size: 16px; font-weight: bold;">🏪 Login as Vendor</div>
-                                <div style="font-size: 12px; opacity: 0.9; margin-top: 3px;">Manage your vendor dashboard</div>
+                            <button class="btn btn-warning" style="width: 100%; padding: 20px; font-size: 18px; text-align: left;" 
+                                onclick="loginAsVillageFeteRole('bob@demo.com')">
+                                <div style="display: flex; align-items: center; gap: 15px;">
+                                    <span style="font-size: 32px;">🏪</span>
+                                    <div>
+                                        <div style="font-weight: bold;">Vendor</div>
+                                        <div style="font-size: 14px; opacity: 0.9; margin-top: 3px;">Manage your stall, track sales, see customer feedback</div>
+                                    </div>
+                                </div>
                             </button>
                             
-                            <button class="btn btn-info" style="width: 100%; text-align: left; padding: 15px; background: #17a2b8; color: white;" 
-                                onclick="handleQRLoginWithRole({id:'user_' + Date.now(), name:'Clara', role:'ORGANISER', points:0, liveLocation:false})">
-                                <div style="font-size: 16px; font-weight: bold;">📋 Login as Organiser</div>
-                                <div style="font-size: 12px; opacity: 0.9; margin-top: 3px;">Manage festival & incidents</div>
+                            <button class="btn" style="width: 100%; padding: 20px; font-size: 18px; text-align: left; background: #28a745; color: white;" 
+                                onclick="loginAsVillageFeteRole('dave@demo.com')">
+                                <div style="display: flex; align-items: center; gap: 15px;">
+                                    <span style="font-size: 32px;">🚑</span>
+                                    <div>
+                                        <div style="font-weight: bold;">SecMed (Security & Medical)</div>
+                                        <div style="font-size: 14px; opacity: 0.9; margin-top: 3px;">Monitor emergencies, respond to incidents</div>
+                                    </div>
+                                </div>
                             </button>
                             
-                            <button class="btn btn-danger" style="width: 100%; text-align: left; padding: 15px;" 
-                                onclick="handleQRLoginWithRole({id:'user_' + Date.now(), name:'Dan', role:'SECURITY', points:0, liveLocation:false})">
-                                <div style="font-size: 16px; font-weight: bold;">🚨 Login as Security/Medical</div>
-                                <div style="font-size: 12px; opacity: 0.9; margin-top: 3px;">Handle security & medical incidents</div>
+                            <button class="btn btn-info" style="width: 100%; padding: 20px; font-size: 18px; text-align: left;" 
+                                onclick="loginAsVillageFeteRole('charlie@demo.com')">
+                                <div style="display: flex; align-items: center; gap: 15px;">
+                                    <span style="font-size: 32px;">📋</span>
+                                    <div>
+                                        <div style="font-weight: bold;">Organiser</div>
+                                        <div style="font-size: 14px; opacity: 0.9; margin-top: 3px;">Manage event, create alerts, oversee operations</div>
+                                    </div>
+                                </div>
                             </button>
                             
-                            <button class="btn" style="width: 100%; text-align: left; padding: 15px; background: #6c757d; color: white;" 
-                                onclick="handleQRLoginWithRole({id:'user_' + Date.now(), name:'Admin', role:'ADMIN', points:0, liveLocation:false})">
-                                <div style="font-size: 16px; font-weight: bold;">⚙️ Login as Admin</div>
-                                <div style="font-size: 12px; opacity: 0.9; margin-top: 3px;">Full system access</div>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="card" style="cursor: default;">
-                        <div style="text-align: center; padding: 20px;">
-                            <div style="font-size: 80px; margin-bottom: 15px;">📱</div>
-                            <h3 style="margin-bottom: 15px;">Or Scan QR Code</h3>
-                            <p style="color: #666; margin-bottom: 20px; line-height: 1.6; font-size: 14px;">
-                                In a real event, scan the QR code at the entrance.<br>
-                                Click below to simulate custom login.
-                            </p>
-                            <button class="btn btn-success" style="padding: 15px 40px; font-size: 16px;" onclick="handleQRLogin()">
-                                🔓 Custom QR Login
+                            <button class="btn" style="width: 100%; padding: 20px; font-size: 18px; text-align: left; background: #6c757d; color: white;" 
+                                onclick="loginAsVillageFeteRole('eve@demo.com')">
+                                <div style="display: flex; align-items: center; gap: 15px;">
+                                    <span style="font-size: 32px;">⚙️</span>
+                                    <div>
+                                        <div style="font-weight: bold;">Admin</div>
+                                        <div style="font-size: 14px; opacity: 0.9; margin-top: 3px;">Full system access, manage all aspects</div>
+                                    </div>
+                                </div>
                             </button>
                         </div>
                     </div>
@@ -1081,6 +1096,170 @@
                     ` : ''}
                 </div>
             `;
+        }
+
+        function handleQRLogin() {
+            const name = prompt('👤 Enter your name:');
+            if (!name || name.trim() === '') {
+                alert('❌ Name is required to login.');
+                return;
+            }
+
+            // Role selection
+            const roleChoice = prompt('Select your role:\n\n1 - Public/Customer\n2 - Vendor\n3 - Organizer\n4 - Security/Medical\n5 - Admin\n\nEnter number (1-5):');
+            
+            const roleMap = {
+                '1': 'USER',
+                '2': 'VENDOR',
+                '3': 'ORGANISER',
+                '4': 'SECURITY',
+                '5': 'ADMIN'
+            };
+
+            const role = roleMap[roleChoice] || 'USER';
+            
+            const newUser = { 
+                id: 'user_' + Date.now(),
+                name: name.trim(), 
+                role: role,
+                points: 0,
+                joinedAt: new Date().toISOString(),
+                liveLocation: false,
+                locationCoords: null
+            };
+            
+            handleQRLoginWithRole(newUser);
+        }
+        
+        // NEW: Village Fête role selection
+        function selectVillageFeteRole(role) {
+            if (role === 'USER') {
+                // Show Alice/Frank selection for Festival Goers
+                state.currentScreen = 'village-fete-goer-select';
+                render();
+            } else {
+                // For other roles, login directly with demo accounts
+                const roleEmailMap = {
+                    'VENDOR': 'bob@demo.com',
+                    'SECURITY': 'dave@demo.com',
+                    'MEDIC': 'dave@demo.com',
+                    'ORGANISER': 'charlie@demo.com',
+                    'ADMIN': 'eve@demo.com'
+                };
+                loginAsVillageFeteRole(roleEmailMap[role]);
+            }
+        }
+        
+        // NEW: Login with specific email for Village Fête
+        function loginAsVillageFeteRole(email) {
+            const user = users.find(u => u.email === email);
+            if (user) {
+                // Load from localStorage if exists
+                const storedUser = localStorage.getItem('gratifood_user_' + user.email);
+                if (storedUser) {
+                    const userData = JSON.parse(storedUser);
+                    Object.assign(user, userData);
+                }
+                
+                state.currentUser = user;
+                state.currentRole = user.role;
+                
+                // Initialize emergency status for this user
+                if (!state.emergencyStatus) state.emergencyStatus = {};
+                if (state.emergencyStatus[user.id] === undefined) {
+                    state.emergencyStatus[user.id] = false;
+                }
+                
+                onUserLogin(user);
+                state.currentScreen = 'dashboard';
+                console.log(`✅ Village Fête Login: ${user.name} (${user.role})`);
+                updateModeBadge();
+                render();
+            }
+        }
+        
+        // NEW: Render Alice/Frank selection for Village Fête
+        function renderVillageFeteGoerSelect() {
+            return `
+                <div class="container">
+                    <button class="btn btn-primary" onclick="state.currentScreen='qr-login'; render();">← Back to Role Select</button>
+                    
+                    <div class="header" style="margin-top: 20px;">
+                        <h1 style="font-size: 36px; text-align: center; background: linear-gradient(135deg, #667eea, #764ba2); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 10px;">
+                            👤 Festival Goer
+                        </h1>
+                        <p style="font-size: 18px; text-align: center; color: #666; margin-bottom: 30px;">Choose your account</p>
+                    </div>
+
+                    <div class="card" style="cursor: default; background: linear-gradient(135deg, #e0f7fa, #80deea); border: 3px solid #0097a7;">
+                        <h3 style="text-align: center; margin-bottom: 15px;">🌟 Demo Accounts</h3>
+                        <p style="text-align: center; color: #00695c; margin-bottom: 20px; font-size: 14px;">
+                            Alice and Frank can log in on different devices and interact independently
+                        </p>
+                        
+                        <div style="display: grid; gap: 15px;">
+                            <button class="btn" style="width: 100%; padding: 20px; background: linear-gradient(135deg, #FF6B9D, #C06C84); color: white; font-size: 18px;" 
+                                onclick="loginAsVillageFeteFestivalGoer('alice@demo.com')">
+                                <div style="display: flex; align-items: center; gap: 15px;">
+                                    <span style="font-size: 48px;">👩</span>
+                                    <div style="text-align: left;">
+                                        <div style="font-weight: bold; font-size: 20px;">Alice</div>
+                                        <div style="font-size: 14px; opacity: 0.9; margin-top: 5px;">alice@demo.com</div>
+                                        <div style="font-size: 13px; opacity: 0.8; margin-top: 3px;">Points: ${users.find(u => u.email === 'alice@demo.com')?.points || 0}</div>
+                                    </div>
+                                </div>
+                            </button>
+                            
+                            <button class="btn" style="width: 100%; padding: 20px; background: linear-gradient(135deg, #4E65FF, #92EFFD); color: white; font-size: 18px;" 
+                                onclick="loginAsVillageFeteFestivalGoer('frank@demo.com')">
+                                <div style="display: flex; align-items: center; gap: 15px;">
+                                    <span style="font-size: 48px;">👨</span>
+                                    <div style="text-align: left;">
+                                        <div style="font-weight: bold; font-size: 20px;">Frank</div>
+                                        <div style="font-size: 14px; opacity: 0.9; margin-top: 5px;">frank@demo.com</div>
+                                        <div style="font-size: 13px; opacity: 0.8; margin-top: 3px;">Points: ${users.find(u => u.email === 'frank@demo.com')?.points || 0}</div>
+                                    </div>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="card" style="cursor: default; background: #fff3cd; border: 2px solid #ffc107;">
+                        <h3 style="color: #856404; margin-bottom: 10px;">💡 Multi-Device Demo</h3>
+                        <p style="color: #856404; font-size: 14px; line-height: 1.6; margin: 0;">
+                            <strong>Testing Tip:</strong> Open this app on two devices (or browsers). Log in as Alice on one and Frank on the other. Their points, purchases, and emergency status are completely independent!
+                        </p>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // NEW: Login as Alice or Frank for Village Fête
+        function loginAsVillageFeteFestivalGoer(email) {
+            const user = users.find(u => u.email === email);
+            if (user) {
+                // Load from localStorage if exists
+                const storedUser = localStorage.getItem('gratifood_user_' + user.email);
+                if (storedUser) {
+                    const userData = JSON.parse(storedUser);
+                    Object.assign(user, userData);
+                }
+                
+                state.currentUser = user;
+                state.currentRole = user.role;
+                
+                // Initialize emergency status for this user
+                if (!state.emergencyStatus) state.emergencyStatus = {};
+                if (state.emergencyStatus[user.id] === undefined) {
+                    state.emergencyStatus[user.id] = false;
+                }
+                
+                onUserLogin(user);
+                state.currentScreen = 'dashboard';
+                console.log(`✅ Village Fête Festival Goer Login: ${user.name}`);
+                updateModeBadge();
+                render();
+            }
         }
 
         function handleQRLogin() {
@@ -2325,6 +2504,141 @@
 
             // ADMIN options
             if (role === 'ADMIN') {
+                // ========== PILOT MANAGEMENT (VILLAGE FÊTE MODE) ==========
+                if (isVillageFeteMode()) {
+                    html += `
+                        <div class="card" style="cursor: default; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: 3px solid #fff;">
+                            <h3 style="color: white; margin: 0 0 15px 0;">🎬 Pilot Management</h3>
+                            <p style="font-size: 14px; opacity: 0.95; margin-bottom: 20px; line-height: 1.5;">
+                                Prepare and run real-world village fête pilot programs with actual vendors and attendees
+                            </p>
+                            
+                            <button class="btn btn-light" style="width: 100%; margin-bottom: 12px; font-weight: bold; padding: 15px;" 
+                                onclick="setupPilot()">
+                                📋 Set Up Pilot
+                            </button>
+                            <p style="font-size: 12px; opacity: 0.9; margin-bottom: 20px; padding: 0 10px;">
+                                Upload site map, place static points (stages, toilets, medical, water, fire), configure vendor data and live tracking
+                            </p>
+                            
+                            <button class="btn btn-warning" style="width: 100%; font-weight: bold; padding: 15px;" 
+                                onclick="runPilot()">
+                                🚀 Run Pilot
+                            </button>
+                            <p style="font-size: 12px; opacity: 0.9; margin: 0; padding: 0 10px;">
+                                Launch live pilot with real vendors, attendees, and staff tracking
+                            </p>
+                        </div>
+                        
+                        <!-- HIDDEN FUTURE CAPABILITIES (Non-Executable Comments) -->
+                        <!--
+                        ╔══════════════════════════════════════════════════════════════╗
+                        ║          FUTURE PILOT CAPABILITIES - NON-EXECUTABLE          ║
+                        ╚══════════════════════════════════════════════════════════════╝
+                        
+                        === 1. ADVANCED MAP UPLOAD ===
+                        - Import custom SVG/PNG/JPEG site maps via drag-and-drop
+                        - Interactive pin placement with snap-to-grid
+                        - Multi-level venue mapping (indoor/outdoor areas)
+                        - GPS coordinate integration for outdoor events
+                        - Automatic path generation between key points
+                        
+                        === 2. REAL VENDOR ONBOARDING PORTAL ===
+                        - Vendor self-registration with email verification
+                        - Menu upload: photos (auto-resize), descriptions, allergen info
+                        - Dynamic pricing management (early bird, peak hours)
+                        - Real-time inventory tracking (sold out notifications)
+                        - Live sales analytics dashboard for vendors
+                        - QR code generation for vendor booth signs
+                        
+                        === 3. LIVE GPS TRACKING ===
+                        - Real GPS tracking for security/medical staff via mobile app
+                        - Geofencing for restricted/VIP areas
+                        - Automated proximity alerts (staff near incident)
+                        - Patrol route optimization with AI suggestions
+                        - Staff shift scheduling with auto-replacement
+                        - Battery level monitoring for staff devices
+                        
+                        === 4. SMART NOTIFICATIONS ===
+                        - Push notifications to staff phones (iOS/Android)
+                        - SMS alerts for critical emergencies
+                        - Email digests for organisers (hourly/daily)
+                        - Automated hydration reminders based on:
+                            * Real-time temperature (weather API)
+                            * Attendee density
+                            * Time since last reminder
+                        - Crowd density alerts (based on gate counts)
+                        - Predicted queue time notifications
+                        - Lost child alert cascades
+                        
+                        === 5. ADVANCED ANALYTICS DASHBOARD ===
+                        - Real-time attendance tracking (gate scanners)
+                        - Vendor performance metrics:
+                            * Sales per hour
+                            * Customer satisfaction trends
+                            * Popular menu items
+                            * Peak trading times
+                        - Customer journey mapping
+                        - Incident response time analytics
+                        - Revenue analytics (total, per vendor, per hour)
+                        - Comparative analysis (this year vs last year)
+                        - Export reports (PDF, Excel, CSV)
+                        
+                        === 6. INTEGRATION CAPABILITIES ===
+                        - Payment gateway integration:
+                            * Stripe, Square, PayPal
+                            * Contactless payments at vendors
+                            * Festival-specific cashless wristbands
+                        - CRM system sync (Salesforce, HubSpot)
+                        - Social media auto-posting:
+                            * Instagram stories (event highlights)
+                            * Twitter updates (live announcements)
+                            * Facebook events sync
+                        - Weather API real-time data (Met Office, OpenWeather)
+                        - Emergency services integration:
+                            * Direct link to 999/999 dispatch
+                            * St John Ambulance coordination
+                            * Police liaison dashboard
+                        
+                        === 7. ATTENDEE EXPERIENCE FEATURES ===
+                        - QR code ticket scanning at gates
+                        - Personalized schedule builder
+                        - Friend finder (opt-in location sharing)
+                        - Festival program with live updates
+                        - Photo booth integration with instant sharing
+                        - Feedback system with photo uploads
+                        - Lost & found database
+                        - Ride-share coordination (Uber/Lyft API)
+                        
+                        === 8. ACCESSIBILITY FEATURES ===
+                        - Wheelchair-accessible route planning
+                        - BSL (British Sign Language) announcements
+                        - Audio descriptions for visually impaired
+                        - Quiet zones for neurodivergent attendees
+                        - Accessible toilet locations highlighted
+                        - Medical assistance priority system
+                        
+                        === 9. SUSTAINABILITY TRACKING ===
+                        - Carbon footprint calculator
+                        - Waste separation monitoring
+                        - Reusable cup deposit tracking
+                        - Vendor sustainability scores
+                        - Water refill station usage stats
+                        
+                        === 10. POST-EVENT FEATURES ===
+                        - Automated thank-you emails
+                        - Survey distribution with incentives
+                        - Photo gallery (user-generated + official)
+                        - Highlight reel video generation
+                        - Next event early-bird ticket offers
+                        
+                        ╔══════════════════════════════════════════════════════════════╗
+                        ║              END FUTURE CAPABILITIES                         ║
+                        ╚══════════════════════════════════════════════════════════════╝
+                        -->
+                    `;
+                }
+                
                 html += renderAdminGratitudeOversight();
                 html += `
                     <button class="btn btn-primary" onclick="state.currentScreen='user-management'; render();">👥 Manage Users</button>
@@ -3518,61 +3832,91 @@
             let html = `
                 <div class="card" style="cursor: default;">
                     <h3>🗺️ Festival Map</h3>
-                    <p style="color: #666; margin-bottom: 15px;">Interactive map with all festival locations</p>
+                    <p style="color: #666; margin-bottom: 15px;">Interactive festival ground - click vendors to highlight</p>
                     
                     <div id="festival-map" style="
                         position: relative;
-                        width: 600px;
-                        height: 400px;
+                        width: 800px;
+                        height: 600px;
                         max-width: 100%;
-                        background: linear-gradient(135deg, #e0f7fa, #80deea);
-                        border: 2px solid #333;
-                        border-radius: 12px;
+                        background: 
+                            linear-gradient(135deg, rgba(144,238,144,0.3) 0%, rgba(34,139,34,0.3) 100%),
+                            repeating-linear-gradient(90deg, transparent, transparent 10px, rgba(255,255,255,0.05) 10px, rgba(255,255,255,0.05) 11px),
+                            repeating-linear-gradient(0deg, transparent, transparent 10px, rgba(255,255,255,0.05) 10px, rgba(255,255,255,0.05) 11px),
+                            linear-gradient(to bottom, #8BC34A 0%, #689F38 100%);
+                        border: 4px solid #5D4037;
+                        border-radius: 16px;
                         margin: 0 auto;
                         overflow: hidden;
-                    ">`;
+                        box-shadow: 0 8px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.3);
+                    ">
+                        <!-- SVG Gravel Paths -->
+                        <svg style="position: absolute; width: 100%; height: 100%; pointer-events: none; z-index: 1;">
+                            <path d="M 0 300 Q 200 280, 400 300 T 800 300" 
+                                  stroke="#D7CCC8" stroke-width="50" fill="none" opacity="0.6"/>
+                            <path d="M 400 0 Q 380 300, 400 400 T 400 600" 
+                                  stroke="#D7CCC8" stroke-width="45" fill="none" opacity="0.5"/>
+                            <path d="M 150 150 Q 300 250, 500 400 T 650 550" 
+                                  stroke="#D7CCC8" stroke-width="35" fill="none" opacity="0.4"/>
+                        </svg>
+                    `;
             
             // Render static pins
             for (const type in mapPins) {
                 mapPins[type].forEach(pin => {
-                    let bgColor, emoji, title;
+                    let bgColor, emoji, title, iconSize, fontSize;
                     
                     switch(type) {
-                        case 'waterPoints': 
-                            bgColor = 'blue'; emoji = '💧'; title = 'Water Point'; 
-                            break;
-                        case 'bars': 
-                            bgColor = 'brown'; emoji = '🍺'; title = 'Bar'; 
-                            break;
-                        case 'medicalPoints': 
-                            bgColor = 'red'; emoji = '🩺'; title = 'Medical Tent';
-                            break;
-                        case 'securityPoints': 
-                            bgColor = 'darkblue'; emoji = '⭐'; title = 'Security Point'; 
-                            break;
-                        case 'firePoints': 
-                            bgColor = 'orange'; emoji = '🔥'; title = 'Fire Point'; 
-                            break;
-                        case 'foodVendorArea': 
-                            bgColor = 'green'; emoji = '🍽️'; title = 'Food Vendors'; 
-                            break;
                         case 'mainArena': 
-                            bgColor = 'purple'; emoji = '🏟️'; title = 'Main Arena'; 
+                            bgColor = '#7B1FA2'; emoji = '🎤'; title = 'Main Stage'; 
+                            iconSize = '50px'; fontSize = '28px';
                             break;
                         case 'bigTop': 
-                            bgColor = 'pink'; emoji = '🤡'; title = 'Big Top'; 
+                            bgColor = '#EC407A'; emoji = '🎪'; title = 'Big Top';
+                            iconSize = '50px'; fontSize = '28px';
                             break;
                         case 'acousticStage': 
-                            bgColor = 'lightgreen'; emoji = '🎸'; title = 'Acoustic Stage'; 
+                            bgColor = '#66BB6A'; emoji = '🎸'; title = 'Acoustic Stage';
+                            iconSize = '40px'; fontSize = '22px';
+                            break;
+                        case 'medicalPoints': 
+                            bgColor = '#E53935'; emoji = '⛑️'; title = 'Medical Tent';
+                            iconSize = '45px'; fontSize = '24px';
+                            break;
+                        case 'waterPoints': 
+                            bgColor = '#2196F3'; emoji = '💧'; title = 'Water Point';
+                            iconSize = '35px'; fontSize = '18px';
+                            break;
+                        case 'bars': 
+                            bgColor = '#8D6E63'; emoji = '🍺'; title = 'Bar';
+                            iconSize = '35px'; fontSize = '18px';
+                            break;
+                        case 'securityPoints': 
+                            bgColor = '#1565C0'; emoji = '🛡️'; title = 'Security'; 
+                            iconSize = '30px'; fontSize = '16px';
+                            break;
+                        case 'firePoints': 
+                            bgColor = '#FF6F00'; emoji = '🧯'; title = 'Fire Point'; 
+                            iconSize = '35px'; fontSize = '18px';
+                            break;
+                        case 'foodVendorArea': 
+                            bgColor = '#558B2F'; emoji = '🍴'; title = 'Food Area'; 
+                            iconSize = '40px'; fontSize = '22px';
                             break;
                         case 'campsite': 
-                            bgColor = 'brown'; emoji = '⛺'; title = 'Campsite'; 
+                            bgColor = '#8D6E63'; emoji = '⛺'; title = 'Campsite'; 
+                            iconSize = '35px'; fontSize = '18px';
+                            break;
+                        case 'toilets': 
+                            bgColor = '#78909C'; emoji = '🚻'; title = 'Toilets'; 
+                            iconSize = '35px'; fontSize = '18px';
                             break;
                         default: 
                             bgColor = 'gray'; emoji = '📍'; title = 'Location';
+                            iconSize = '30px'; fontSize = '16px';
                     }
                     
-                    // Pin icon with visible label below
+                    // Pin icon with visible label below - UPDATED SIZES
                     html += `
                         <div style="
                             position: absolute;
@@ -3580,35 +3924,37 @@
                             top: ${pin.y}px;
                             transform: translate(-50%, -50%);
                             text-align: center;
+                            z-index: 10;
                         ">
                             <div 
                                 title="${title}"
                                 style="
-                                    width: 25px;
-                                    height: 25px;
+                                    width: ${iconSize || '30px'};
+                                    height: ${iconSize || '30px'};
                                     background: ${bgColor};
+                                    border: 2px solid white;
                                     border-radius: 50%;
                                     display: flex;
                                     align-items: center;
                                     justify-content: center;
                                     cursor: pointer;
-                                    font-size: 14px;
-                                    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                                    font-size: ${fontSize || '16px'};
+                                    box-shadow: 0 4px 12px rgba(0,0,0,0.4), 0 0 0 3px white;
                                     transition: transform 0.2s;
-                                    margin: 0 auto 3px auto;
+                                    margin: 0 auto 5px auto;
                                 "
-                                onmouseover="this.style.transform='scale(1.3)'"
+                                onmouseover="this.style.transform='scale(1.2)'"
                                 onmouseout="this.style.transform='scale(1)'"
                             >${emoji}</div>
                             <div style="
-                                font-size: 9px;
+                                font-size: 11px;
                                 font-weight: bold;
                                 color: #333;
-                                background: rgba(255,255,255,0.9);
-                                padding: 2px 4px;
-                                border-radius: 3px;
+                                background: rgba(255,255,255,0.95);
+                                padding: 3px 8px;
+                                border-radius: 6px;
                                 white-space: nowrap;
-                                box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+                                box-shadow: 0 2px 8px rgba(0,0,0,0.25);
                             ">${title}</div>
                         </div>
                     `;
@@ -3707,6 +4053,62 @@
                             transition: left 3s ease-in-out, top 3s ease-in-out;
                         "
                     >✚</div>
+                `;
+            }
+            
+            // ========== MOVING SECURITY STAFF ICONS (DEMO) ==========
+            // Only show if user can see live security (ORGANISER, ADMIN)
+            if (canSeeLiveSecurity) {
+                html += `
+                    <!-- Security Staff 1: Patrolling left-right -->
+                    <div 
+                        id="security-staff-1"
+                        class="moving-security-icon"
+                        title="Security Patrol"
+                        style="
+                            position: absolute;
+                            left: 150px;
+                            top: 350px;
+                            width: 32px;
+                            height: 32px;
+                            background: #1565C0;
+                            border: 3px solid #FFD700;
+                            border-radius: 50%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 18px;
+                            box-shadow: 0 4px 10px rgba(21,101,192,0.6);
+                            transform: translate(-50%, -50%);
+                            z-index: 50;
+                            transition: left 3s ease-in-out;
+                        "
+                    >⭐</div>
+                    
+                    <!-- Security Staff 2: Patrolling opposite direction -->
+                    <div 
+                        id="security-staff-2"
+                        class="moving-security-icon"
+                        title="Security Patrol"
+                        style="
+                            position: absolute;
+                            left: 650px;
+                            top: 250px;
+                            width: 32px;
+                            height: 32px;
+                            background: #1565C0;
+                            border: 3px solid #FFD700;
+                            border-radius: 50%;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 18px;
+                            box-shadow: 0 4px 10px rgba(21,101,192,0.6);
+                            transform: translate(-50%, -50%);
+                            z-index: 50;
+                            transition: left 3s ease-in-out;
+                        "
+                    >⭐</div>
                 `;
             }
             
@@ -4524,6 +4926,10 @@
                 case 'qr-login':
                     html = renderQRLogin();
                     break;
+                
+                case 'village-fete-goer-select':
+                    html = renderVillageFeteGoerSelect();
+                    break;
                     
                 case 'village-home':
                     // Landing page routing based on role (integration.js)
@@ -4947,6 +5353,61 @@
             render();
         }
 
+        // ========== ADMIN PILOT MANAGEMENT FUNCTIONS ==========
+        
+        /**
+         * Set Up Pilot - Wizard for real-world pilot preparation
+         */
+        function setupPilot() {
+            alert(`📋 SET UP PILOT WIZARD
+            
+In production, this opens a step-by-step wizard:
+
+🗺️  STEP 1: Upload Site Map
+   • Drag & drop festival map image
+   • Or draw using interactive tools
+   
+📍 STEP 2: Place Static Points
+   • Stages, toilets, medical, bars, water, fire
+   • Drag icons to exact locations
+   
+🏪 STEP 3: Upload Vendor Data
+   • Import vendor list (CSV/Excel)
+   • Add menus, photos, prices
+   
+👥 STEP 4: Configure Staff
+   • Add security/medical accounts
+   • Set patrol routes (optional)
+   
+⚙️  STEP 5: Final Settings
+   • Emergency notifications
+   • Weather alerts
+   
+✅ DEMO: All data pre-loaded for testing`);
+        }
+        
+        /**
+         * Run Pilot - Launch live pilot system
+         */
+        function runPilot() {
+            const confirmed = confirm(`🚀 RUN PILOT
+
+Launch live pilot with:
+• Real vendor logins
+• QR attendee registration
+• GPS staff tracking
+• Emergency notifications
+
+⚠️ Sends emails to vendors
+⚠️ Activates live systems
+
+Continue?`);
+            
+            if (confirmed) {
+                alert('🎬 PILOT LAUNCHING...\n\n✅ Vendor emails sent\n✅ GPS tracking active\n✅ QR codes enabled\n✅ Systems monitoring live\n\n🎉 Pilot is LIVE!\n\n(Demo simulation)');
+            }
+        }
+
         /**
          * Gets current weather scenario
          */
@@ -5088,28 +5549,59 @@
             let toggle = false;
             
             medicalAnimationInterval = setInterval(() => {
-                const staff1 = document.getElementById('medical-staff-1');
-                const staff2 = document.getElementById('medical-staff-2');
+                // Medical staff animations
+                const med1 = document.getElementById('medical-staff-1');
+                const med2 = document.getElementById('medical-staff-2');
                 
-                if (!staff1 || !staff2) return; // Icons not on page
+                // Security staff animations
+                const sec1 = document.getElementById('security-staff-1');
+                const sec2 = document.getElementById('security-staff-2');
                 
                 // Toggle positions every 3 seconds
                 if (toggle) {
                     // Medical Staff 1: Move right
-                    staff1.style.left = '500px';
-                    staff1.style.top = '150px';
+                    if (med1) {
+                        med1.style.left = '500px';
+                        med1.style.top = '150px';
+                    }
                     
                     // Medical Staff 2: Move down
-                    staff2.style.left = '400px';
-                    staff2.style.top = '300px';
+                    if (med2) {
+                        med2.style.left = '400px';
+                        med2.style.top = '300px';
+                    }
+                    
+                    // Security Staff 1: Patrol right
+                    if (sec1) {
+                        sec1.style.left = '650px';
+                    }
+                    
+                    // Security Staff 2: Patrol left
+                    if (sec2) {
+                        sec2.style.left = '150px';
+                    }
                 } else {
                     // Medical Staff 1: Move back left
-                    staff1.style.left = '100px';
-                    staff1.style.top = '150px';
+                    if (med1) {
+                        med1.style.left = '100px';
+                        med1.style.top = '150px';
+                    }
                     
                     // Medical Staff 2: Move back up
-                    staff2.style.left = '400px';
-                    staff2.style.top = '100px';
+                    if (med2) {
+                        med2.style.left = '400px';
+                        med2.style.top = '100px';
+                    }
+                    
+                    // Security Staff 1: Patrol back left
+                    if (sec1) {
+                        sec1.style.left = '150px';
+                    }
+                    
+                    // Security Staff 2: Patrol back right
+                    if (sec2) {
+                        sec2.style.left = '650px';
+                    }
                 }
                 
                 toggle = !toggle;
